@@ -4,7 +4,7 @@ import cv2 as cv
 import numpy as np
 from numpy.typing import NDArray
 
-image_path = "frames/image_bg_text.jpg"
+image_path = "frames/key_hit.jpg"
 
 # numbers that seem to work
 # lower    upper    scale   blur_size   method              use case
@@ -13,8 +13,6 @@ image_path = "frames/image_bg_text.jpg"
 # 136      328      .8      3           canny then blur     edge detection
 # 203      181      .8      5           blur then canny     edge detection
 # 203      181      .8      5           blur then mask      black key identification
-
-
 
 lower_thresh = 203
 upper_thresh = 181
@@ -37,7 +35,7 @@ def main():
 
     while True:
         blur = cv.GaussianBlur(image, (blur_size, blur_size), 0)
-        canny = cv.Canny(blur, lower_thresh, upper_thresh, None, 3)
+        # canny = cv.Canny(blur, lower_thresh, upper_thresh, None, 3)
 
         black_keys = find_black_keys(blur)
 
@@ -46,7 +44,7 @@ def main():
             cv.circle(image, (x, y), 5, (255, 0, 0))
 
         cv.imshow("Source", image)
-        cv.imshow("Blur post Canny", canny)
+        # cv.imshow("Blur post Canny", canny)
 
         key = cv.waitKey()
         if key == ord('q'):
@@ -114,9 +112,24 @@ def sort_into_buckets(data, spike_thresh = 8, range_thresh = 10):
 
 
 # Given an image, returns stats of the components identified as black keys
+# This method uses a mask to find black colored components and will fail when color changes
+# should modify this to fall back on history when the function fails to find something in the current frame
 # [x, y, width, height, area]
 def find_black_keys(image, lower_thresh = 0, upper_thresh = 30):
     black_mask = cv.inRange(image, np.array([lower_thresh, lower_thresh, lower_thresh]), np.array([upper_thresh, upper_thresh, upper_thresh]))
+    black_mask_components = cv.connectedComponentsWithStats(black_mask)
+    (num_labels, labels, stats, centroids) = black_mask_components
+
+    order = np.argsort(stats[:,1]) # sort components by x-value
+    buckets = sort_into_buckets(stats[order][:,1], spike_thresh=20, range_thresh=30) # get buckets
+    bucket_with_most_values = buckets[np.argmax(buckets, axis=0)[4]] # find the bucket with most items
+    (lb, ub, start, end, length) = bucket_with_most_values
+
+    return stats[start : end] # returns items in the bucket containing black keys
+
+
+def find_black_keys_grayscale(image, lower_thresh = 0, upper_thresh = 30):
+    black_mask = cv.inRange(image, lower_thresh, upper_thresh) # type: ignore
     black_mask_components = cv.connectedComponentsWithStats(black_mask)
     (num_labels, labels, stats, centroids) = black_mask_components
 
@@ -127,4 +140,4 @@ def find_black_keys(image, lower_thresh = 0, upper_thresh = 30):
 
     return stats[start : end] # returns items in the bucket containing black keys
 
-main()
+# main()

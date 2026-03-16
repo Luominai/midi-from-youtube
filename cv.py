@@ -1,7 +1,13 @@
 import cv2 as cv
 import numpy as np
 
-frame = None
+from key_segmentation import find_black_keys, find_black_keys_grayscale, blur_size, upper_thresh, lower_thresh
+
+history = {}
+current_truth = None
+voting_finished = False
+vote_threshold = 90
+
 
 def setup_video_capture(process, path_to_video=""):
     is_paused = True
@@ -38,19 +44,52 @@ def setup_video_capture(process, path_to_video=""):
         skip_frame = False
 
 
-bg_sub = cv.createBackgroundSubtractorKNN()
-bg_sub.setDist2Threshold(3600)
-bg_sub.setHistory(1)
-
 def process(frame: MatLike): # type: ignore
-    frame = cv.resize(frame, None, fx=0.34, fy=0.34)
+    global current_truth
+    global voting_finished
+    global vote_threshold
+
+    frame = cv.resize(frame, None, fx=0.8, fy=0.8)
+
+    if not voting_finished:
+        blur = cv.GaussianBlur(frame, (blur_size, blur_size), 0)
+        black_keys = find_black_keys(blur)
+        num_keys_detected = len(black_keys)
+
+        # when we count a new number of keys, file it under history
+        if num_keys_detected not in history.keys():
+            history[num_keys_detected] = [black_keys, 1.0]
+            # establish ground truth if there is none yet
+            if current_truth == None:
+                current_truth = history[num_keys_detected]
+        # when we count a number of keys we've seen before, update history
+        else:
+            historical_avg = history[num_keys_detected][0]                                  # get the historical avg
+            old_count = history[num_keys_detected][1]                                       # get the number of frames in the history
+            history[num_keys_detected][1] += 1                                              # increment the number of frames in the history
+            historical_avg = (historical_avg * old_count + black_keys) / (old_count + 1)    # update history
+
+            # switch ground truths if this number has been voted more
+            if old_count + 1 > current_truth[1]: # type: ignore
+                current_truth = history[num_keys_detected]
+                print("switch to ", num_keys_detected)
+
+            # lock when one set reaches the vote threshold
+            if (old_count + 1) >= vote_threshold:
+                print("voting finished")
+                voting_finished = True
+
+        # print(num_keys_detected, history[num_keys_detected][1])
+
+
+    for key in current_truth[0]: # type: ignore
+        (x, y, width, height, area) = key
+        color = (0, 255, 0) if voting_finished else (0, 0, 255)
+        cv.circle(frame, (x, y), 5, color)
+        cv.rectangle(frame, (x, y), (x + width, y + height), color, 1)
+
+
     cv.imshow("frame", frame)
-    no_bg = bg_sub.apply(frame)
-    cv.imshow("no bg", no_bg)
-    gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-    cv.imshow("gray", gray)
-    ret, binary = cv.threshold(gray, 127, 255, cv.THRESH_BINARY)
-    cv.imshow("binary", binary)
     return
 
 
