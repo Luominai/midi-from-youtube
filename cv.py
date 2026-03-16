@@ -41,7 +41,8 @@ def setup_video_capture(process, path_to_video=""):
 bg_sub = cv.createBackgroundSubtractorKNN()
 bg_sub.setDist2Threshold(3600)
 bg_sub.setHistory(1)
-def process(frame: MatLike):
+
+def process(frame: MatLike): # type: ignore
     frame = cv.resize(frame, None, fx=0.34, fy=0.34)
     cv.imshow("frame", frame)
     no_bg = bg_sub.apply(frame)
