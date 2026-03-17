@@ -13,3 +13,5 @@ If we detect that the number of keys has been the same for some time, we declare
 We could also use a "voting" system
 When we detect keys, note how many keys we detect. At every frame, we place a vote according to the number of keys we detect
 The most voted for number is the ground truth. If we detect less than that many keys, then a key has been played
+
+yt-dlp -- print filename -o "%(title)s.%(ext)s" iElUjQXQkPc
