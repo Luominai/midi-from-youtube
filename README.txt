@@ -15,3 +15,5 @@ When we detect keys, note how many keys we detect. At every frame, we place a vo
 The most voted for number is the ground truth. If we detect less than that many keys, then a key has been played
 
 yt-dlp -- print filename -o "%(title)s.%(ext)s" iElUjQXQkPc
+
+The current adjustment algorithm uses standard deviation of the area, but it's probably better to use standard deviation of the height / width or both

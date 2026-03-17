@@ -7,7 +7,7 @@ history = {}
 current_truth = None
 voting_finished = False
 voting_enabled = False
-vote_threshold = 60
+vote_threshold = 30
 area_std_thresh = 85
 black_key_upper_thresh = 30
 steps_allowed = 4
@@ -128,5 +128,5 @@ def process(frame: MatLike): # type: ignore
     return
 
 
-# setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
-setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
+setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
+# setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
