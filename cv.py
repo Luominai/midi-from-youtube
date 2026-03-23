@@ -1,8 +1,10 @@
+import math
+
 import cv2 as cv
 import numpy as np
 
-from key_segmentation import find_black_keys, find_black_keys_grayscale, blur_size, upper_thresh, lower_thresh, get_pattern, get_leftmost_note
-from utils import label_keys
+from key_segmentation import find_black_keys, find_black_keys_grayscale, blur_size, sort_into_buckets, upper_thresh, lower_thresh, get_pattern, get_leftmost_note
+from utils import label_keys, split_line, to_gray
 
 history = {}
 current_truth = None
@@ -118,20 +120,66 @@ def process(frame: MatLike): # type: ignore
             # print(num_keys_detected, history[num_keys_detected][1])
 
     if current_truth:
-        # color = (0, 255, 0) if voting_finished else (0, 0, 255)
-        # draw_keys(current_truth[0], frame, color)
+        color = (0, 255, 0) if voting_finished else (0, 0, 255)
+        keys = current_truth[0]
+        draw_keys(current_truth[0], frame, color)
+
+        # chunk_gray = cv.cvtColor(chunk, cv.COLOR_BGR2GRAY)
+        # ret,chunk_binary = cv.threshold(chunk_gray, 100, 255, cv.THRESH_BINARY)
+        # cv.rectangle(frame, (0, avg_y), (frame.shape[1], avg_y + 50))
 
         if voting_finished:
-            order = np.argsort(current_truth[0][:,0])
-            sorted_keys = current_truth[0][order] # type: ignore
-            mid = len(sorted_keys) // 2
-            sample = sorted_keys[mid-2: mid+3]
+            avg_y = math.ceil(np.average(keys[:,1] + keys[:,3]))
+            avg_height = math.ceil(np.average(keys[:,3]))
 
-            # print(get_leftmost_note(sorted_keys))
-            # draw_keys(sample, frame, (255,0,255))
-            label_keys(sorted_keys, frame)
+            # print(avg_y, avg_height)
+
+            # avg_y: int = math.floor(np.average(current_truth[0][:,1]))
+            # avg_height: int = math.floor(np.average(current_truth[0][:,3]))
+            offset = 5
+            scale = 0.3
+
+            chunk = frame[avg_y + offset : avg_y + math.ceil(avg_height * scale) + offset]
+
+            # cv.imshow("chunk", chunk)
+
+            upper_line = frame[avg_y + offset]
+
+            # cv.imshow("upper", upper_line)
+            # lower_line = frame[avg_y + math.ceil(avg_height * scale) + offset]
+
+            upper_split = split_line(upper_line, 20)
+            print(upper_split.shape)
+
+            for (start, end) in upper_split:
+                # print(start, end)
+                cv.circle(frame, (start + (end - start) // 2, avg_y + offset), 5, (255,255,0), 1)
+                # cv.circle(frame, (start, avg_y + offset + 8), 5, (255,255,0), 1)
+
+            # print(upper_split)
+
+            cv.rectangle(
+                frame, 
+                (0, avg_y + offset), 
+                (frame.shape[1], avg_y + math.ceil(avg_height * scale) + offset), 
+                (255,0,255), 
+                1
+            )
 
             pause = True
+
+
+    #     if voting_finished:
+    #         order = np.argsort(current_truth[0][:,0])
+    #         sorted_keys = current_truth[0][order] # type: ignore
+    #         mid = len(sorted_keys) // 2
+    #         sample = sorted_keys[mid-2: mid+3]
+
+    #         # print(get_leftmost_note(sorted_keys))
+    #         # draw_keys(sample, frame, (255,0,255))
+    #         label_keys(sorted_keys, frame)
+
+    #         pause = True
 
     cv.imshow("frame", frame)
     return pause
@@ -144,5 +192,5 @@ def draw_keys(keys, frame, color):
         cv.rectangle(frame, (x, y), (x + width, y + height), color, 1)
 
 
-setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
-# setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
+# setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
+setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")

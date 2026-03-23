@@ -142,28 +142,53 @@ def label_keys(black_keys, image):
 
     draw_keys(white_keys, image, (255, 0, 0))
 
-    
 
-def get_white_keys(black_keys):
-    order = np.argsort(black_keys[:,0])
-    black_keys = black_keys[order] # type: ignore
-    leftmost_note = get_leftmost_note(black_keys)
-    index = sharps.index(leftmost_note)
+def split_line(line, spike_thresh=30):
+    start_of_bucket = 0
+    buckets = []
 
-    white_keys = []
+    print(line.shape)
 
-    for key in black_keys:
-        note = sharps[index]
-        (x, y, width, height, area) = key
+    cliff = None
+    in_valley = False
 
-        white_keys.append(
-            (x - width - 3, y + 2* height // 3, width, height // 3, 2 * area / 9)
+    for i in range(len(line)):
+        current = line[i].astype(np.int16)
+
+        # if we are in a valley, compare all new points to the cliff
+        if in_valley:
+            distance = np.linalg.norm(current - cliff)
+
+            # if the distance is under the spike threshold, exit valley and create a new bucket
+            if distance < spike_thresh:
+                in_valley = False
+                start_of_bucket = i
+        else:
+            previous = line[i - 1].astype(np.int16) if i > 0 else None
+            distance = np.linalg.norm(current - previous) if i > 0 else None
+            print(current, previous, current - previous if i > 0 else None, distance)
+            
+            # when we exceed the spike, save the bucket and record the last point before we exceeded the spike threshold
+            if distance and distance > spike_thresh:
+                buckets.append(
+                    (start_of_bucket, i)
+                )
+                # print("spike at ", i)
+                cliff = previous
+                in_valley = True
+            
+    # add the last bucket if we're not in a valley
+    if not in_valley:
+        buckets.append(
+            (start_of_bucket, len(line))
         )
-        if note == "A" or note == "D":
-            white_keys.append(
-                (x + width + 3, y + 2* height // 3, width, height // 3, 2 * area / 9)
-            )
 
-        index = (index + 1) % len(sharps)
+    return np.array(buckets)
 
-    return white_keys
+
+def to_gray(image):
+    return cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+
+
+def to_binary(image, threshold = 127):
+    return cv.threshold(image, threshold, 255, cv.THRESH_BINARY)
