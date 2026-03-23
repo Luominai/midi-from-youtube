@@ -173,6 +173,7 @@ def get_pattern(keys, offset = 0):
 
     return pattern
 
+# keys must be sorted
 def get_leftmost_note(keys):
     pattern = get_pattern(keys)
     sharps = ""

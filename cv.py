@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 
 from key_segmentation import find_black_keys, find_black_keys_grayscale, blur_size, upper_thresh, lower_thresh, get_pattern, get_leftmost_note
+from utils import label_keys
 
 history = {}
 current_truth = None
@@ -117,18 +118,20 @@ def process(frame: MatLike): # type: ignore
             # print(num_keys_detected, history[num_keys_detected][1])
 
     if current_truth:
-        color = (0, 255, 0) if voting_finished else (0, 0, 255)
-        draw_keys(current_truth[0], frame, color)
+        # color = (0, 255, 0) if voting_finished else (0, 0, 255)
+        # draw_keys(current_truth[0], frame, color)
 
-    if voting_finished:
-        offset = 0
-        keys = current_truth[0] # type: ignore
-        mid = len(keys) // 2
-        sample = keys[mid-2 + offset : mid+3 + offset]
-        print(get_leftmost_note(keys))
-        draw_keys(sample, frame, (255,0,255))
+        if voting_finished:
+            order = np.argsort(current_truth[0][:,0])
+            sorted_keys = current_truth[0][order] # type: ignore
+            mid = len(sorted_keys) // 2
+            sample = sorted_keys[mid-2: mid+3]
 
-        pause = True
+            # print(get_leftmost_note(sorted_keys))
+            # draw_keys(sample, frame, (255,0,255))
+            label_keys(sorted_keys, frame)
+
+            pause = True
 
     cv.imshow("frame", frame)
     return pause
@@ -141,5 +144,5 @@ def draw_keys(keys, frame, color):
         cv.rectangle(frame, (x, y), (x + width, y + height), color, 1)
 
 
-# setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
-setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
+setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
+# setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
