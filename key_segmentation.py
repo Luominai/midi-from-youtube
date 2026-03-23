@@ -38,6 +38,7 @@ def main():
         # canny = cv.Canny(blur, lower_thresh, upper_thresh, None, 3)
 
         black_keys = find_black_keys(blur)
+        get_pattern(black_keys)
 
         for key in black_keys:
             (x, y, width, height, area) = key
@@ -140,5 +141,61 @@ def find_black_keys_grayscale(image, lower_thresh = 0, upper_thresh = 30):
     (lb, ub, start, end, length) = bucket_with_most_values
 
     return stats[start : end] # returns items in the bucket containing black keys
+
+
+def get_pattern(keys, offset = 0):
+    mid = len(keys) // 2 + offset
+    sample = keys[mid-2 : mid+3]
+    pattern = "1"
+
+    gaps = []
+    for i in range(4):
+        curr = sample[i]
+        next = sample[i + 1]
+        gaps.append(next[0] - curr[0])
+
+    for i in range(1, len(gaps)):
+        curr = gaps[i]
+        prev = gaps[i - 1]
+
+        # special case to account for the second key
+        if i == 1:
+            if (prev == max(curr, prev) and prev > 1.1 * curr):
+                pattern += " "
+            pattern += "1"  
+
+        if curr == max(curr, prev) and curr > 1.1 * prev:
+            pattern += " "
+
+        pattern += "1"    
+
+    print(pattern)
+
+    return pattern
+
+def get_leftmost_note(keys):
+    pattern = get_pattern(keys)
+    sharps = ""
+
+    match pattern:
+        case "111 11":
+            sharps = "FGACD"
+        case "11 11 1":
+            sharps = "GACDF"
+        case "1 11 11":
+            sharps = "ACDFG"
+        case "11 111":
+            sharps = "CDFGA"
+        case "1 111 1":
+            sharps = "DFGAC"
+
+    # the first key of the sample is at index i
+    i = len(keys) // 2 - 2
+    # the first key of the keyboard is at index 0
+    # iterate backward i times
+    # or calculate i % 5 and go back that amount
+    first_note = sharps[-1 * (i % 5)]
+    return first_note
+
 
 # main()

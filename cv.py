@@ -1,7 +1,7 @@
 import cv2 as cv
 import numpy as np
 
-from key_segmentation import find_black_keys, find_black_keys_grayscale, blur_size, upper_thresh, lower_thresh
+from key_segmentation import find_black_keys, find_black_keys_grayscale, blur_size, upper_thresh, lower_thresh, get_pattern, get_leftmost_note
 
 history = {}
 current_truth = None
@@ -43,7 +43,8 @@ def setup_video_capture(process, path_to_video=""):
             print("Can't receive frame (stream end?). Exiting ...")
             break
         
-        process(frame)
+        if process(frame):
+            is_paused = True
 
         skip_frame = False
 
@@ -54,6 +55,7 @@ def process(frame: MatLike): # type: ignore
     global vote_threshold
     global black_key_upper_thresh
     global voting_enabled
+    pause = False
 
     frame = cv.resize(frame, None, fx=0.6, fy=0.6)
 
@@ -82,11 +84,9 @@ def process(frame: MatLike): # type: ignore
         if area_std <= area_std_thresh:
             voting_enabled = True
 
-        for key in black_keys: # type: ignore
-            (x, y, width, height, area) = key
-            color = (255, 0, 0)
-            cv.circle(frame, (x, y), 5, color)
-            cv.rectangle(frame, (x, y), (x + width, y + height), color, 1)
+
+        color = (255, 0, 0)
+        draw_keys(black_keys, frame, color)
 
 
         # voting may be disabled due to adjustment
@@ -117,15 +117,28 @@ def process(frame: MatLike): # type: ignore
             # print(num_keys_detected, history[num_keys_detected][1])
 
     if current_truth:
-        for key in current_truth[0]: # type: ignore
-            (x, y, width, height, area) = key
-            color = (0, 255, 0) if voting_finished else (0, 0, 255)
-            cv.circle(frame, (x, y), 5, color)
-            cv.rectangle(frame, (x, y), (x + width, y + height), color, 1)
+        color = (0, 255, 0) if voting_finished else (0, 0, 255)
+        draw_keys(current_truth[0], frame, color)
 
+    if voting_finished:
+        offset = 0
+        keys = current_truth[0] # type: ignore
+        mid = len(keys) // 2
+        sample = keys[mid-2 + offset : mid+3 + offset]
+        print(get_leftmost_note(keys))
+        draw_keys(sample, frame, (255,0,255))
+
+        pause = True
 
     cv.imshow("frame", frame)
-    return
+    return pause
+
+
+def draw_keys(keys, frame, color):
+    for key in keys: # type: ignore
+        (x, y, width, height, area) = key
+        cv.circle(frame, (x, y), 5, color)
+        cv.rectangle(frame, (x, y), (x + width, y + height), color, 1)
 
 
 # setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
