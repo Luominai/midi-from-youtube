@@ -143,39 +143,44 @@ def label_keys(black_keys, image):
     draw_keys(white_keys, image, (255, 0, 0))
 
 
-def split_line(line, spike_thresh=30):
+def split_line(line, spike_thresh=30, plat_thresh = 5):
     start_of_bucket = 0
     buckets = []
 
     print(line.shape)
 
-    cliff = None
+    cliff = []
     in_valley = False
 
     for i in range(len(line)):
         current = line[i].astype(np.int16)
 
-        # if we are in a valley, compare all new points to the cliff
-        if in_valley:
-            distance = np.linalg.norm(current - cliff)
+        # if there is no cliff, establish the current point as the cliff
+        if len(cliff) == 0:
+            cliff = current
 
-            # if the distance is under the spike threshold, exit valley and create a new bucket
-            if distance < spike_thresh:
+        # compare the current point to the cliff
+        distance = np.linalg.norm(current - cliff)
+
+        # if the elevation difference is high, we are entering a valley
+        if distance > spike_thresh:
+            in_valley = True
+            # store the current bucket
+            buckets.append((start_of_bucket, i))
+
+        # while in a valley, skip buckets and instead check for when we exit the valley
+        if in_valley:
+            # we exit the valley if our new ground is within some elevation of the old ground
+            if distance < plat_thresh:
                 in_valley = False
                 start_of_bucket = i
-        else:
-            previous = line[i - 1].astype(np.int16) if i > 0 else None
-            distance = np.linalg.norm(current - previous) if i > 0 else None
-            print(current, previous, current - previous if i > 0 else None, distance)
-            
-            # when we exceed the spike, save the bucket and record the last point before we exceeded the spike threshold
-            if distance and distance > spike_thresh:
-                buckets.append(
-                    (start_of_bucket, i)
-                )
-                # print("spike at ", i)
-                cliff = previous
-                in_valley = True
+            else:
+                print("valley:", current, cliff, current - cliff if i > 0 else None, distance)
+                continue
+
+        # while not in a valley, update the cliff so its elevation is averaged
+        cliff = (cliff * (i - start_of_bucket) + current) / (i - start_of_bucket + 1)
+        print("plateau:", current, cliff, current - cliff if i > 0 else None, distance)
             
     # add the last bucket if we're not in a valley
     if not in_valley:

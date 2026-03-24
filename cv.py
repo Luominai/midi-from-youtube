@@ -1,3 +1,4 @@
+import copy
 import math
 
 import cv2 as cv
@@ -15,12 +16,15 @@ area_std_thresh = 85
 black_key_upper_thresh = 30
 steps_allowed = 4
 
+line_thresh = 30
+
 
 def setup_video_capture(process, path_to_video=""):
     is_paused = True
     skip_frame = True
     frame_count = 0
     global frame
+    global line_thresh
 
     cap = cv.VideoCapture(path_to_video)
     while cap.isOpened():
@@ -37,6 +41,12 @@ def setup_video_capture(process, path_to_video=""):
             cv.imwrite(output_filename, frame)
             print("saved frame to ", output_filename)
             frame_count += 1
+        elif key == ord('z'):
+            line_thresh -= 1
+            print("line thresh: ", line_thresh)
+        elif key == ord('x'):
+            line_thresh += 1
+            print("line thresh: ", line_thresh)
         if is_paused and not skip_frame:
             continue
 
@@ -148,23 +158,36 @@ def process(frame: MatLike): # type: ignore
             # cv.imshow("upper", upper_line)
             # lower_line = frame[avg_y + math.ceil(avg_height * scale) + offset]
 
-            upper_split = split_line(upper_line, 20)
+            upper_split = split_line(upper_line, spike_thresh=15, plat_thresh=5)
             print(upper_split.shape)
 
+            plotted = []
+
             for (start, end) in upper_split:
-                # print(start, end)
-                cv.circle(frame, (start + (end - start) // 2, avg_y + offset), 5, (255,255,0), 1)
-                # cv.circle(frame, (start, avg_y + offset + 8), 5, (255,255,0), 1)
+                print(start, end, end - start)
+                # cv.circle(frame, (start + (end - start) // 2, avg_y + offset), 5, (255,255,0), 1)
+
+                color = [255,255,0]
+                y = avg_y + offset + 8
+
+                for (p_s, p_e) in plotted:
+                    if abs(start - p_s) < 5 and abs(end - p_e) < 5:
+                        color[2] += 30
+                        y += 4
+
+                        # print(color)
+                cv.circle(frame, (start, y), 5, copy.deepcopy(color), 1)
+                plotted.append((start, end))
 
             # print(upper_split)
 
-            cv.rectangle(
-                frame, 
-                (0, avg_y + offset), 
-                (frame.shape[1], avg_y + math.ceil(avg_height * scale) + offset), 
-                (255,0,255), 
-                1
-            )
+            # cv.rectangle(
+            #     frame, 
+            #     (0, avg_y + offset), 
+            #     (frame.shape[1], avg_y + math.ceil(avg_height * scale) + offset), 
+            #     (255,0,255), 
+            #     1
+            # )
 
             pause = True
 
