@@ -152,11 +152,14 @@ def split_line(line, spike_thresh=30, plat_thresh = 5):
     cliff = []
     in_valley = False
 
-    for i in range(len(line)):
+    while (np.average(line[start_of_bucket] < 180)):
+        start_of_bucket += 1
+
+    for i in range(start_of_bucket, len(line)):
         current = line[i].astype(np.int16)
 
         # if there is no cliff, establish the current point as the cliff
-        if len(cliff) == 0:
+        if len(cliff) == 0 and not in_valley:
             cliff = current
 
         # compare the current point to the cliff
@@ -175,12 +178,12 @@ def split_line(line, spike_thresh=30, plat_thresh = 5):
                 in_valley = False
                 start_of_bucket = i
             else:
-                print("valley:", current, cliff, current - cliff if i > 0 else None, distance)
+                # print("valley:", current, cliff, current - cliff if i > 0 else None, distance)
                 continue
 
         # while not in a valley, update the cliff so its elevation is averaged
         cliff = (cliff * (i - start_of_bucket) + current) / (i - start_of_bucket + 1)
-        print("plateau:", current, cliff, current - cliff if i > 0 else None, distance)
+        # print("plateau:", current, cliff, current - cliff if i > 0 else None, distance)
             
     # add the last bucket if we're not in a valley
     if not in_valley:

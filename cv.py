@@ -158,25 +158,15 @@ def process(frame: MatLike): # type: ignore
             # cv.imshow("upper", upper_line)
             # lower_line = frame[avg_y + math.ceil(avg_height * scale) + offset]
 
-            upper_split = split_line(upper_line, spike_thresh=15, plat_thresh=5)
+            upper_split = split_line(upper_line, spike_thresh=20, plat_thresh=5)
             print(upper_split.shape)
 
             plotted = []
 
             for (start, end) in upper_split:
-                # print(start, end, end - start)
                 # cv.circle(frame, (start + (end - start) // 2, avg_y + offset), 5, (255,255,0), 1)
-
-                color = [255,255,0]
-                y = avg_y + offset + 8
-
-                for (p_s, p_e) in plotted:
-                    if abs(start - p_s) < 5 and abs(end - p_e) < 5:
-                        color[2] += 30
-                        y += 4
-
-                        # print(color)
                 cv.circle(frame, (start, avg_y + offset + 8), 5, (255,255,0), 1)
+                cv.circle(frame, (end, avg_y + offset + 16), 5, (255,255,0), 1)
                 plotted.append((start, end))
 
             # print(upper_split)
@@ -215,5 +205,5 @@ def draw_keys(keys, frame, color):
         cv.rectangle(frame, (x, y), (x + width, y + height), color, 1)
 
 
-# setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
-setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
+setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
+# setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
