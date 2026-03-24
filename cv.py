@@ -164,7 +164,7 @@ def process(frame: MatLike): # type: ignore
             plotted = []
 
             for (start, end) in upper_split:
-                print(start, end, end - start)
+                # print(start, end, end - start)
                 # cv.circle(frame, (start + (end - start) // 2, avg_y + offset), 5, (255,255,0), 1)
 
                 color = [255,255,0]
@@ -176,7 +176,7 @@ def process(frame: MatLike): # type: ignore
                         y += 4
 
                         # print(color)
-                cv.circle(frame, (start, y), 5, copy.deepcopy(color), 1)
+                cv.circle(frame, (start, avg_y + offset + 8), 5, (255,255,0), 1)
                 plotted.append((start, end))
 
             # print(upper_split)
