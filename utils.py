@@ -163,7 +163,7 @@ def split_line(line, spike_thresh=30, plat_thresh = 5):
         distance = np.linalg.norm(current - cliff)
 
         # if the elevation difference is high, we are entering a valley
-        if distance > spike_thresh:
+        if not in_valley and distance > spike_thresh:
             in_valley = True
             # store the current bucket
             buckets.append((start_of_bucket, i))
