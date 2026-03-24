@@ -156,18 +156,27 @@ def process(frame: MatLike): # type: ignore
             upper_line = frame[avg_y + offset]
 
             # cv.imshow("upper", upper_line)
-            # lower_line = frame[avg_y + math.ceil(avg_height * scale) + offset]
+            lower_line = frame[avg_y + math.ceil(avg_height * scale) + offset]
 
             upper_split = split_line(upper_line, spike_thresh=20, plat_thresh=5)
-            print(upper_split.shape)
-
-            plotted = []
+            # print(upper_split.shape)
+            lower_split = split_line(lower_line, spike_thresh=20, plat_thresh=5)
 
             for (start, end) in upper_split:
                 # cv.circle(frame, (start + (end - start) // 2, avg_y + offset), 5, (255,255,0), 1)
-                cv.circle(frame, (start, avg_y + offset + 8), 5, (255,255,0), 1)
-                cv.circle(frame, (end, avg_y + offset + 16), 5, (255,255,0), 1)
-                plotted.append((start, end))
+                cv.circle(frame, (start, avg_y + offset), 5, (255,255,0), 1)
+                cv.circle(frame, (end, avg_y + offset + 8), 5, (255,255,0), 1)
+            
+
+            for (start, end) in lower_split:
+                # cv.circle(frame, (start + (end - start) // 2, avg_y + offset), 5, (255,255,0), 1)
+                cv.circle(frame, (start, avg_y + math.ceil(avg_height * scale) + offset), 5, (0,255,255), 1)
+                cv.circle(frame, (end, avg_y + math.ceil(avg_height * scale) + offset + 8), 5, (0,255,255), 1)
+
+            for i in range(len(upper_split)):
+                (u_s, u_e) = upper_split[i]
+                (l_s, l_e) = lower_split[i]
+                cv.rectangle(frame, (min(u_s, l_s), avg_y + offset), (max(u_e, l_e), avg_y + math.ceil(avg_height * scale) + offset), (255,0,255), 1)
 
             # print(upper_split)
 
