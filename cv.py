@@ -36,6 +36,7 @@ def setup_video_capture(process, path_to_video=""):
             is_paused = not is_paused
         elif key == ord('d'):
             skip_frame = True
+            
         if key == ord('f') and frame is not None: # save frame
             output_filename = "frames/" + str(frame_count) + ".jpg"
             cv.imwrite(output_filename, frame)
