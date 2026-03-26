@@ -6,8 +6,9 @@ import cv2 as cv
 
 def draw_keys(keys, frame, color):
     for key in keys: # type: ignore
+        # print(key)
         (x, y, width, height) = key
-        cv.circle(frame, (x, y), 5, color)
+        # cv.circle(frame, (x, y), 5, color)
         cv.rectangle(frame, (x, y), (x + width, y + height), color, 1)
 
 
@@ -15,7 +16,7 @@ def split_line(line, spike_thresh=30, plat_thresh = 5):
     start_of_bucket = 0
     buckets = []
 
-    print(line.shape)
+    # print(line.shape)
 
     cliff = []
     in_valley = False
@@ -78,7 +79,7 @@ def process_video(path_to_video):
     frame = None
 
     # vars for computer vision
-    known_keys = np.empty(shape=(0, 6), dtype=[
+    known_keys = np.empty(shape=(0), dtype=[
         ('x', 'i4'),
         ('y', 'i4'),
         ('width', 'i4'),
@@ -131,6 +132,8 @@ def process_video(path_to_video):
 
 
 def process_frame(frame, known_keys, votes, thresholds):
+    pause_video = False
+
     # resize the frame
     frame = cv.resize(frame, None, fx=0.6, fy=0.6)
 
@@ -142,6 +145,7 @@ def process_frame(frame, known_keys, votes, thresholds):
 
         # before we cast the vote, try to validate it. Check for indications that the detected keys might be bad
         (valid, metrics) = validate_black_keys(detected_black_keys)
+        # print("valid" if valid else "invalid", metrics)
         
         # if the vote is not valid, make adjustments to improve validity
         if not valid:
@@ -154,11 +158,15 @@ def process_frame(frame, known_keys, votes, thresholds):
             if num_votes >= thresholds["required_votes"]:
                 black_keys = vote_avg
                 white_keys = find_white_keys(frame, black_keys)
-
+                print("vote decided for", vote_bucket) 
                 label_keys(black_keys, white_keys, known_keys)
-                return True
-
-    return False
+                pause_video = True
+            
+        draw_keys(detected_black_keys, frame, (0,255,0) if valid else (0,0,255))
+            
+    draw_labeled_keys(known_keys, frame, (255,255,0))
+    cv.imshow("frame", frame)
+    return pause_video
 
 
 # (x, y, width, height)
@@ -175,13 +183,16 @@ def find_black_keys(image, lower_thresh = 0, upper_thresh = 30, blur_size = 11):
     order = np.argsort(stats[:,1]) 
 
     # group components together according to y-value
-    buckets = sort_into_buckets(stats[order][:,1], spike_thresh=20, range_thresh=30) 
+    buckets = sort_into_buckets(stats[order][:,1], spike_thresh=20, range_thresh=30)
 
     # the bucket with the most items is likely to be one with the keys
-    bucket_with_most_values = buckets[np.argmax(buckets, axis=0)[4]]
+    bucket_with_most_values = buckets[np.argmax(buckets[:,1] - buckets[:,0])]
     (start, end) = bucket_with_most_values
 
-    return stats[start : end][:4]
+    # print("stats:", stats)
+    # print("bucket:", stats[start : end][:,:4])
+
+    return stats[start : end][:,:4]
 
 
 # data must be sorted
@@ -220,7 +231,7 @@ def validate_black_keys(black_keys, area_std_thresh = 85):
     
     # keys should have similar area
     metrics["area_std"] = np.std(black_keys[:,2] * black_keys[:,3])
-    if metrics["area_std"] > area_std_thresh:
+    if metrics["area_std"] >= area_std_thresh:
         verdict = False
 
     # TODO: keys should have a certain width to height ratio
@@ -298,14 +309,18 @@ def find_white_keys(image, black_keys, offset = 5, scale = 0.3):
 # (x, y, width, height, note, octave)
 def label_keys(black_keys, white_keys, known_keys):
     known_keys.resize(
-        (len(black_keys) + len(white_keys), 6)
+        (len(black_keys) + len(white_keys))
     )
+    # print("keys:", known_keys)
+    # print(known_keys.shape)
 
     # sort black keys by their center x-value
     black_incr_center_x_order = np.argsort(black_keys[:,0] + black_keys[:,2] // 2, 0)
     black_keys = black_keys[black_incr_center_x_order]
     first_black_key = black_keys[0]
     index_of_first_black_key = -1
+
+    # print("black keys:", black_keys, first_black_key)
     
     # sort white keys by their center-x value
     white_incr_center_x_order = np.argsort(white_keys[:,0] + white_keys[:,2] // 2, 0)
@@ -321,25 +336,27 @@ def label_keys(black_keys, white_keys, known_keys):
         white = white_keys[white_index]
 
         if black[0] + black[2] // 2 < white[0] + white[2] // 2:
-            if black == first_black_key:
+            # print(black, first_black_key)
+
+            if np.array_equal(black, first_black_key):
                 index_of_first_black_key = total_index
 
-            known_keys[total_index] = (black[0], black[1], black[2], black[3], "NA", 0)
+            known_keys[total_index] = (black[0], black[1], black[2], black[3], 'NA', 0)
             black_index += 1
         else:
-            known_keys[total_index] = (white[0], white[1], white[2], white[3], "NA", 0)
+            known_keys[total_index] = (white[0], white[1], white[2], white[3], 'NA', 0)
             white_index += 1
 
         total_index = black_index + white_index
 
     for i in range(black_index, len(black_keys)):
         black = black_keys[black_index]
-        known_keys[total_index] = (black[0], black[1], black[2], black[3], "NA", 0)
+        known_keys[total_index] = (black[0], black[1], black[2], black[3], 'NA', 0)
         total_index += 1
 
     for i in range(black_index + white_index, len(white_keys)):
         white = white_keys[white_index]
-        known_keys[total_index] = (white[0], white[1], white[2], white[3], "NA", 0)
+        known_keys[total_index] = (white[0], white[1], white[2], white[3], 'NA', 0)
         total_index += 1
 
     # get the leftmost black note, then use that to get the leftmost note
@@ -362,6 +379,7 @@ def label_keys(black_keys, white_keys, known_keys):
         if notes[curr_index] == "C":
             octave += 1
 
+    print(known_keys)
 
 # keys must be sorted
 def get_leftmost_black_note(keys):
@@ -394,6 +412,8 @@ def get_pattern(keys, offset = 0):
     sample = keys[mid-2 : mid+3]
     pattern = "1"
 
+    # print(sample)
+
     gaps = []
     for i in range(4):
         curr = sample[i]
@@ -423,3 +443,10 @@ def shift_note(note, amount):
     index = notes.index(note)
     index = (index + amount) % len(notes)
     return notes[index]
+
+
+def draw_labeled_keys(keys, frame, color):
+    for key in keys:
+        (x, y, width, height, note, octave) = key
+        cv.rectangle(frame, (x, y), (x + width, y + height), color, 1)
+        cv.putText(frame, note, (x, y), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)

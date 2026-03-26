@@ -5,7 +5,7 @@ import cv2 as cv
 import numpy as np
 
 from key_segmentation import find_black_keys, find_black_keys_grayscale, blur_size, sort_into_buckets, upper_thresh, lower_thresh, get_pattern, get_leftmost_note
-from utils import label_keys, split_line, to_gray
+from utils import label_keys, split_line, to_gray, process_video
 
 history = {}
 current_truth = None
@@ -216,4 +216,6 @@ def draw_keys(keys, frame, color):
 
 
 # setup_video_capture(process=process, path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
-setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
+# setup_video_capture(process=process, path_to_video="videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
+
+process_video(path_to_video="videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
