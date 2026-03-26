@@ -155,7 +155,7 @@ def process_frame(frame, known_keys, votes, thresholds):
                 black_keys = vote_avg
                 white_keys = find_white_keys(frame, black_keys)
 
-                known_keys = label_keys(black_keys, white_keys)
+                label_keys(black_keys, white_keys, known_keys)
                 return True
 
     return False
@@ -361,8 +361,6 @@ def label_keys(black_keys, white_keys, known_keys):
         curr_index = (curr_index + 1) % len(notes)
         if notes[curr_index] == "C":
             octave += 1
-
-    return known_keys
 
 
 # keys must be sorted
