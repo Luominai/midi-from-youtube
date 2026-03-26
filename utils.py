@@ -252,12 +252,12 @@ def process_video(path_to_video):
         
 
 
-def process_frame(frame, known_keys, votes):
+def process_frame(frame, known_keys, votes, thresholds):
     # resize the frame
     frame = cv.resize(frame, None, fx=0.6, fy=0.6)
 
     # if we don't know where the black keys are yet, vote until we figure it out
-    if known_keys == None:
+    if known_keys is None:
         # we cast a vote for the number of keys detected. If we detect one number consistently, then the video has probably stabilized
         detected_black_keys = find_black_keys(frame)
         vote_bucket = len(detected_black_keys)
@@ -270,18 +270,14 @@ def process_frame(frame, known_keys, votes):
             valid = adjust_thresholds(frame, thresholds, metrics)
         # if the vote is valid (after adjustment), cast it
         if valid:
-            (num_votes, vote_avg) = cast_vote(votes, vote_bucket, detected_black_keys)
+            (vote_avg, num_votes) = cast_vote(votes, vote_bucket, detected_black_keys)
 
             # if the number of votes for this bucket reaches some threshold, the vote is decided
             if num_votes >= thresholds["required_votes"]:
-                known_black_keys = vote_avg
-                white_keys = find_white_keys(known_black_keys)
+                black_keys = vote_avg
+                white_keys = find_white_keys(frame, black_keys)
 
-                known_keys = vote_avg
-
-
-    
-    pass
+                known_keys = label_keys(black_keys, white_keys)
 
 
 # (x, y, width, height)
@@ -375,6 +371,21 @@ def adjust_thresholds(image, thresholds, initial_metrics, steps_allowed = 4):
     return False
 
 
+def cast_vote(votes, choice, keys):
+    # when we count a new number of keys, file it under history
+    if choice not in votes.keys():
+        votes[choice] = [keys, 1.0]
+
+    # when we count a number of keys we've seen before, update history
+    else:
+        avg = votes[choice][0]
+        num_votes = votes[choice][1]
+        avg = (avg * num_votes + keys) / (num_votes + 1)
+        votes[choice][1] += 1
+
+    return (votes[choice][0], votes[choice][1])
+
+
 def find_white_keys(image, black_keys, offset = 5, scale = 0.3):
     white_keys = []
 
@@ -440,10 +451,11 @@ def label_keys(black_keys, white_keys):
     for i in range(white_index, len(white_keys)):
         output.append(white_keys[i])
 
-
+    # get the leftmost black note, then use that to get the leftmost note
     leftmost_black_note = get_leftmost_black_note(black_keys)
     leftmost_note = shift_note(leftmost_black_note, -1 * index_of_first_black_key_in_merged_array)
 
+    # setup the structure of the final keys array and fill in all the values
     notes = "A A# B C C# D D# E F F# G G#".split(" ")
     index_of_leftmost_note = notes.index(leftmost_note)
     curr_index = index_of_leftmost_note
@@ -460,9 +472,11 @@ def label_keys(black_keys, white_keys):
     labeled_keys = np.empty(shape=(len(output), 6), dtype=dtype) 
     
     for i in range(len(output)):
+        # copy the positional and size data. add note and octave data
         (x, y, width, height) = output[i]
         labeled_keys[i] = (x, y, width, height, notes[curr_index], octave)
 
+        # increment octave everytime we loop around to C
         curr_index = (curr_index + 1) % len(notes)
         if notes[curr_index] == "C":
             octave += 1
