@@ -296,14 +296,16 @@ def find_white_keys(image, black_keys, offset = 5, scale = 0.3):
 
 
 # (x, y, width, height, note, octave)
-def label_keys(black_keys, white_keys):
-    output = []
+def label_keys(black_keys, white_keys, known_keys):
+    known_keys.resize(
+        (len(black_keys) + len(white_keys), 6)
+    )
 
     # sort black keys by their center x-value
     black_incr_center_x_order = np.argsort(black_keys[:,0] + black_keys[:,2] // 2, 0)
     black_keys = black_keys[black_incr_center_x_order]
     first_black_key = black_keys[0]
-    index_of_first_black_key_in_merged_array = -1
+    index_of_first_black_key = -1
     
     # sort white keys by their center-x value
     white_incr_center_x_order = np.argsort(white_keys[:,0] + white_keys[:,2] // 2, 0)
@@ -312,6 +314,7 @@ def label_keys(black_keys, white_keys):
     # merge the two according to their center-x values
     black_index = 0
     white_index = 0
+    total_index = 0
 
     while black_index < len(black_keys) and white_index < len(white_keys):
         black = black_keys[black_index]
@@ -319,50 +322,47 @@ def label_keys(black_keys, white_keys):
 
         if black[0] + black[2] // 2 < white[0] + white[2] // 2:
             if black == first_black_key:
-                index_of_first_black_key_in_merged_array = len(output)
-            output.append(black)
+                index_of_first_black_key = total_index
+
+            known_keys[total_index] = (black[0], black[1], black[2], black[3], "NA", 0)
             black_index += 1
         else:
-            output.append(white)
+            known_keys[total_index] = (white[0], white[1], white[2], white[3], "NA", 0)
             white_index += 1
 
-    for i in range(black_index, len(black_keys)):
-        output.append(black_keys[i])
+        total_index = black_index + white_index
 
-    for i in range(white_index, len(white_keys)):
-        output.append(white_keys[i])
+    for i in range(black_index, len(black_keys)):
+        black = black_keys[black_index]
+        known_keys[total_index] = (black[0], black[1], black[2], black[3], "NA", 0)
+        total_index += 1
+
+    for i in range(black_index + white_index, len(white_keys)):
+        white = white_keys[white_index]
+        known_keys[total_index] = (white[0], white[1], white[2], white[3], "NA", 0)
+        total_index += 1
 
     # get the leftmost black note, then use that to get the leftmost note
     leftmost_black_note = get_leftmost_black_note(black_keys)
-    leftmost_note = shift_note(leftmost_black_note, -1 * index_of_first_black_key_in_merged_array)
+    leftmost_note = shift_note(leftmost_black_note, -1 * index_of_first_black_key)
 
     # setup the structure of the final keys array and fill in all the values
     notes = "A A# B C C# D D# E F F# G G#".split(" ")
     index_of_leftmost_note = notes.index(leftmost_note)
     curr_index = index_of_leftmost_note
     octave = 0
-
-    dtype = [
-        ('x', 'i4'),
-        ('y', 'i4'),
-        ('width', 'i4'),
-        ('height', "i4"),
-        ('note', 'U2'),
-        ('octave', 'i1')
-    ]
-    labeled_keys = np.empty(shape=(len(output), 6), dtype=dtype) 
     
-    for i in range(len(output)):
-        # copy the positional and size data. add note and octave data
-        (x, y, width, height) = output[i]
-        labeled_keys[i] = (x, y, width, height, notes[curr_index], octave)
+    for i in range(len(known_keys)):
+        # add note and octave data
+        known_keys[i][4] = notes[curr_index]
+        known_keys[i][5] = octave
 
         # increment octave everytime we loop around to C
         curr_index = (curr_index + 1) % len(notes)
         if notes[curr_index] == "C":
             octave += 1
 
-    return labeled_keys
+    return known_keys
 
 
 # keys must be sorted
