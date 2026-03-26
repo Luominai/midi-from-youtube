@@ -405,9 +405,49 @@ def find_white_keys(image, black_keys, offset = 5, scale = 0.3):
 
 # (x, y, width, height, note, octave)
 def label_keys(black_keys, white_keys):
-    leftmost_note = get_leftmost_note(black_keys)
-    merged_keys = black_keys + white_keys
+    output = []
+
+    # sort black keys by their center x-value
+    black_incr_center_x_order = np.argsort(black_keys[:,0] + black_keys[:,2] // 2, 0)
+    black_keys = black_keys[black_incr_center_x_order]
+    first_black_key = black_keys[0]
+    index_of_first_black_key_in_merged_array = -1
     
+    # sort white keys by their center-x value
+    white_incr_center_x_order = np.argsort(white_keys[:,0] + white_keys[:,2] // 2, 0)
+    white_keys = white_keys[white_incr_center_x_order]
+
+    # merge the two according to their center-x values
+    black_index = 0
+    white_index = 0
+
+    while black_index < len(black_keys) and white_index < len(white_keys):
+        black = black_keys[black_index]
+        white = white_keys[white_index]
+
+        if black[0] + black[2] // 2 < white[0] + white[2] // 2:
+            if black == first_black_key:
+                index_of_first_black_key_in_merged_array = len(output)
+            output.append(black)
+            black_index += 1
+        else:
+            output.append(white)
+            white_index += 1
+
+    for i in range(black_index, len(black_keys)):
+        output.append(black_keys[i])
+
+    for i in range(white_index, len(white_keys)):
+        output.append(white_keys[i])
+
+
+    leftmost_black_note = get_leftmost_black_note(black_keys)
+    leftmost_note = shift_note(leftmost_black_note, -1 * index_of_first_black_key_in_merged_array)
+
+    notes = "A A# B C C# D D# E F F# G G#".split(" ")
+    index_of_leftmost_note = notes.index(leftmost_note)
+    curr_index = index_of_leftmost_note
+    octave = 0
 
     dtype = [
         ('x', 'i4'),
@@ -417,4 +457,47 @@ def label_keys(black_keys, white_keys):
         ('note', 'U2'),
         ('octave', 'i1')
     ]
-    keys = np.array(merged_keys, dtype)
+    labeled_keys = np.empty(shape=(len(output), 6), dtype=dtype) 
+    
+    for i in range(len(output)):
+        (x, y, width, height) = output[i]
+        labeled_keys[i] = (x, y, width, height, notes[curr_index], octave)
+
+        curr_index = (curr_index + 1) % len(notes)
+        if notes[curr_index] == "C":
+            octave += 1
+
+    return labeled_keys
+
+
+# keys must be sorted
+def get_leftmost_black_note(keys):
+    pattern = get_pattern(keys)
+    sharps = ""
+
+    match pattern:
+        case "111 11":
+            sharps = "F# G# A# C# D#"
+        case "11 11 1":
+            sharps = "G# A# C# D# F#"
+        case "1 11 11":
+            sharps = "A# C# D# F# G#"
+        case "11 111":
+            sharps = "C# D# F# G# A#"
+        case "1 111 1":
+            sharps = "D# F# G# A# C#"
+
+    sharps = sharps.split(" ")
+
+    # the first key of the sample is at index i
+    i = len(keys) // 2 - 2
+    # the first key of the keyboard is at index 0. calculate i % 5 and go back that amount
+    first_black_note = sharps[-1 * (i % 5)]
+    return first_black_note
+
+
+def shift_note(note, amount):
+    notes = "A A# B C C# D D# E F F# G G#".split(" ")
+    index = notes.index(note)
+    index = (index + amount) % len(notes)
+    return notes[index]
