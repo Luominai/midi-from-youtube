@@ -17,3 +17,5 @@ The most voted for number is the ground truth. If we detect less than that many 
 yt-dlp -- print filename -o "%(title)s.%(ext)s" iElUjQXQkPc
 
 The current adjustment algorithm uses standard deviation of the area, but it's probably better to use standard deviation of the height / width or both
+
+The current method using a black pixel mask just doesn't generalize well
