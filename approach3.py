@@ -5,29 +5,35 @@ import numpy as np
 from scipy import stats
 from setup import setup_video_capture
 
+scan_progress = 0
+
 def process(frame):
     paused = False
     (height, width, channels) = frame.shape
     scale = 720 / height
     frame = cv.resize(frame, None, fx=scale, fy=scale)
+    global scan_progress
 
     (height, width, channels) = frame.shape
-    layers, positions = stratify(frame, 3, top=(2 * height // 3), offset=(0 * height // 32))
+    # blur = cv.blur(frame, (3,3))
+    
+    layers, positions = stratify(frame, 25, top=height//2)
+    batch = 5
 
-    for i in range(len(layers)):
+    for i in range(batch * scan_progress, batch * (scan_progress + 1), 1):
         layer = layers[i]
-        (colors, labels) = quantize_colors(layer, 2)
+        (colors, labels) = quantize_colors(layer, 4)
         valleys = get_valleys(labels)
         y_pos = positions[i]
 
         for (start, end) in valleys:
-            print(start, end)
             cv.rectangle(frame, (start, y_pos - 5), (end, y_pos + 5), (0,0,255), 2)
 
-        print("strata " + str(i) + ":", len(valleys))
+        cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
 
-    for pos in positions:
-        cv.rectangle(frame, (0, pos), (frame.shape[1], pos), (100,0,0), 1) # type: ignore
+        print("strata", str(i), ":", len(valleys))
+
+    scan_progress = (scan_progress + 1) % (len(layers) // batch)
 
     cv.imshow("frame", frame)
 
@@ -35,14 +41,16 @@ def process(frame):
     return paused
 
 
-def stratify(frame, num_layers, top = 0, offset = 0):
+def stratify(frame, max_layers, top = 0, offset = 0, limit = None, reverse = False):
+    limit = max_layers if limit is None else limit
     (height, width, channels) = frame.shape
-    layers = np.empty(shape=(num_layers, 1, frame.shape[1], 3))
-    positions = np.empty(shape=num_layers, dtype=int)
-    step = (height - top) / (num_layers + 1)
+    layers = np.empty(shape=(limit, 1, frame.shape[1], 3))
+    positions = np.empty(shape=limit, dtype=int)
+    step = (height - top) / (max_layers + 1)
 
-    for i in range(num_layers):
-        y_pos = math.floor(step * (i + 1)) + top + offset
+    for i in range(limit):
+        step_num = i + max_layers - limit + 1 if reverse else i + 1
+        y_pos = math.floor(step * step_num) + top + offset
         positions[i] = y_pos
         layers[i] = frame[y_pos]
 
@@ -92,7 +100,7 @@ def get_valleys(labels):
     return valleys
 
 
-setup_video_capture(process, "videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
-# setup_video_capture(process, "videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
+# setup_video_capture(process, "videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
+setup_video_capture(process, "videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
 # setup_video_capture(process, "videos/Van Gogh by Virginio Aiello, On Piano - [Piano Tutorial] (Synthesia - SeeMusic) [2ESlH-fwxIc].webm")
 # setup_video_capture(process, "videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
