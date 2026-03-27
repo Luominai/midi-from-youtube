@@ -100,7 +100,38 @@ def get_valleys(labels):
     return valleys
 
 
+# for syncing the output of get_valleys across multiple strata
+# each strata will have a different number of valleys so the input will be jagged
+# numpy does not support jagged arrays, so the input will be a python list
+def sync_strata_valleys(valleys):
+    # the value at index i is the current index of valley[i]
+    index_of = np.zeros(shape=len(valleys), dtype=int)
+
+    # get the elements
+    elements = [valley[index_of[valley_id]] for valley_id, valley in enumerate(valleys)]
+
+    # once we get the elements, we can group them according to their start value using kmeans (or a simple threshold)
+
+    # choose the group that has the smallest mean start so we don't skip over any values
+
+    # group the elements again by width
+
+    # record the data in each subgroup as part of one whole
+
+    # advance the indexes of the arrays that the data in the group came from
+
+    return np.array(elements)
+
+        
+# valleys = [
+#     np.array([0, 2, 4, 6]),
+#     np.array([1, 3, 5]),
+#     np.array([6, 7]),
+# ]
+
+# print(sync_strata_valleys(valleys))
+
 # setup_video_capture(process, "videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
-setup_video_capture(process, "videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
+# setup_video_capture(process, "videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
 # setup_video_capture(process, "videos/Van Gogh by Virginio Aiello, On Piano - [Piano Tutorial] (Synthesia - SeeMusic) [2ESlH-fwxIc].webm")
 # setup_video_capture(process, "videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
