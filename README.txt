@@ -19,3 +19,39 @@ yt-dlp -- print filename -o "%(title)s.%(ext)s" iElUjQXQkPc
 The current adjustment algorithm uses standard deviation of the area, but it's probably better to use standard deviation of the height / width or both
 
 The current method using a black pixel mask just doesn't generalize well
+
+Given the valley information about a stratum, we want to match each valley to a component
+The components are not known at the start of the matching and must be dynamically created based on similarity
+I did this before using the sort_into_buckets function but that function takes 2 pixel thresholds
+Can we do this without using any hard pixel thresholds?
+We could calculate the average separation between valleys and use a fraction of that to determine how big the pixel threshold should be
+
+
+A valley in one strata is similar to a valley in an adjacent strata if 
+- They have similar widths (more or less equivalent to the following 2)
+- They have similar start values
+- They have similar end values
+- The second valley is the valley in that strata with the most similar start value to the first valley
+
+1. Start with the index of all strata at 0
+2. Check if the start of the valley at those indexes are similar
+3. For any that are not similar, check if their start is less than or greater than the average of the similar ones
+    3a. If less than, advance the index of that strata and jump to step 2
+    3b. If greater than, ignore that strata and 
+
+
+Given a big block of data from all the strata (~50). We want to identify which valleys come from the same key gap
+1. Start with the index of all strata at 0
+2. Check if the start of the valley at those indexes are similar, meaning:
+    a. Their start values are within a small distance of each other
+3. For any values that are considered not similar, check if their start is less than or greater than the average of the similar ones
+    3a. If less than, advance the index of that strata and check again for similarity
+    3b. If greater than, ignore the valley from that strata 
+4. Search for an existing bucket to put the similar values into. The bucket is chosen based on:
+    a. Similarity in average start. Pick the bucket with the lowest distance
+    b. The distance from the average to the bucket must also be less than the largest difference between 2 similar
+4. Assign all the similar values to a common bucket
+
+
+Given a group of strata and a big array containing valleys from the same key gap, 
+we want to assign the valleys in the group of strata to a key gap
