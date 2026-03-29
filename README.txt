@@ -55,3 +55,11 @@ Given a big block of data from all the strata (~50). We want to identify which v
 
 Given a group of strata and a big array containing valleys from the same key gap, 
 we want to assign the valleys in the group of strata to a key gap
+
+
+We want to go up (SB / 2 - 1) rows
+Each row is 512 pixels
+So, we want to subtract 512 * (SB / 2 - 1) from the Middle Left Point
+
+The middle left point is stored in t5
+We want to subtract 512 * (SB / 2 - 1) from t5

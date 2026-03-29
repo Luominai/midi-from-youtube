@@ -6,42 +6,68 @@ from scipy import stats
 from setup import setup_video_capture
 
 scan_progress = 0
+votes = {}
+vote_threshold = 120
+vote_verdict = None
+num_strata = 25
 
 def process(frame):
     paused = False
     (height, width, channels) = frame.shape
     scale = 720 / height
     frame = cv.resize(frame, None, fx=scale, fy=scale)
-    global scan_progress
-
     (height, width, channels) = frame.shape
-    # frame = cv.blur(frame, (3,3))
-    
-    layers, positions = stratify(frame, 25, top=height//2)
-    batch = 5
+    global num_strata
 
-    for i in range(batch * scan_progress, batch * (scan_progress + 1), 1):
-        layer = layers[i]
-        # (colors, labels) = quantize_colors(layer, 4)
-        # valleys, plateaus = get_terrain(labels)
-        valleys, plateaus = adaptive_quantization(layer)
-        y_pos = positions[i]
-
-        color = (0,255,0) if is_uniform(plateaus) else (0,0,255)
-
-        for (start, end) in plateaus:
-            cv.rectangle(frame, (start, y_pos - 5), (end, y_pos + 5), color, 2)
-
-        cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
-
-        print("strata", str(i), ":", len(plateaus))
-
-    scan_progress = (scan_progress + 1) % (len(layers) // batch)
+    if vote_verdict is None:
+        scan(frame)
+    else:
+        num_votes, layers = votes[vote_verdict]
+        for strata_num, layer in layers.items():
+            step = (height // 2) / (num_strata + 1)
+            y_pos = math.floor(step * (strata_num + 1)) + (height // 2)
+            draw_terrain(frame, layer, y_pos, (255,0,0))
 
     cv.imshow("frame", frame)
 
-
     return paused
+
+
+def scan(frame, num_strata = 25, batch = 5):
+    global scan_progress
+    global votes
+    global vote_threshold
+    global vote_verdict
+
+    (height, width, channels) = frame.shape
+    layers, positions = stratify(frame, num_strata, top=height//2)
+
+    for i in range(batch * scan_progress, batch * (scan_progress + 1)):
+        layer = layers[i]
+        valleys, plateaus = adaptive_quantization(layer)
+        y_pos = positions[i]
+        valid = is_valid(plateaus)
+
+        color = (0,255,0) if valid else (0,0,255)
+        draw_terrain(frame, plateaus, y_pos, color)
+
+        if valid:
+            num_votes = cast_vote(votes, plateaus, i)
+            print("strata", str(i), ":", len(plateaus), num_votes)
+
+            if num_votes >= vote_threshold:
+                vote_verdict = len(plateaus)
+                print("vote decided for", vote_verdict)
+                break
+
+    scan_progress = (scan_progress + 1) % (len(layers) // batch)
+    
+
+def draw_terrain(frame, terrain, y_pos, color):
+    for (start, end) in terrain:
+        cv.rectangle(frame, (start, y_pos - 5), (end, y_pos + 5), color, 2)
+
+    cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
 
 
 def stratify(frame, max_layers, top = 0, offset = 0, limit = None, reverse = False):
@@ -96,11 +122,15 @@ def adaptive_quantization(image):
     return (valleys, plateaus)
 
 
+def is_valid(plateaus):
+    return is_uniform(plateaus) and len(plateaus) >= 7
+
+
 def is_uniform(terrain, buffer = 1, scale_thresh = 1.5, pixel_thresh = 8):
     shortest = math.inf
     longest = 0.0
 
-    if len(terrain) <= 2 * buffer:
+    if len(terrain) <= 2 * buffer + 1:
         return False
 
     # # we don't know the full extent of the first and last runs, so we exclude them from consideration
@@ -131,15 +161,17 @@ def get_terrain(labels, min_plat_size = 4, min_valley_size = 2):
     start_of_plateau = 0
     
     for i in range(len(labels)):
-        if not in_valley and terrain[i] != plateau_label and (i - start_of_plateau) >= min_plat_size:
+        if not in_valley and terrain[i] != plateau_label:
             in_valley = True
             start_of_valley = i
-            plateaus.append((start_of_plateau, i))
+            if (i - start_of_plateau) >= min_plat_size:
+                plateaus.append((start_of_plateau, i))
 
-        elif in_valley and terrain[i] == plateau_label and (i - start_of_valley) >= min_valley_size:
+        elif in_valley and terrain[i] == plateau_label:
             in_valley = False
             start_of_plateau = i
-            valleys.append((start_of_valley, i))
+            if (i - start_of_valley) >= min_valley_size:
+                valleys.append((start_of_valley, i))
 
     if in_valley and (len(terrain) - start_of_valley) >= min_valley_size:
         valleys.append((start_of_valley, len(terrain)))
@@ -149,7 +181,24 @@ def get_terrain(labels, min_plat_size = 4, min_valley_size = 2):
     return valleys, plateaus
 
 
+# first indexed by plateau count, then by strata number
+def cast_vote(votes, plateaus, strata_num):
+    choice = len(plateaus)
+
+    # when we count a new number of keys, file it under history
+    if choice not in votes.keys():
+        votes[choice] = [1, {strata_num: plateaus}]
+
+    # when we count a number of keys we've seen before, update history
+    else:
+        num_votes, strata_data = votes[choice]
+        votes[choice][0] = num_votes + 1
+        strata_data[strata_num] = plateaus
+
+    return (votes[choice][0])
+
+
 # setup_video_capture(process, "videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
-setup_video_capture(process, "videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
+# setup_video_capture(process, "videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
 # setup_video_capture(process, "videos/Van Gogh by Virginio Aiello, On Piano - [Piano Tutorial] (Synthesia - SeeMusic) [2ESlH-fwxIc].webm")
-# setup_video_capture(process, "videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
+setup_video_capture(process, "videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
