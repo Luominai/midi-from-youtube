@@ -10,6 +10,7 @@ votes = {}
 vote_threshold = 120
 vote_verdict = None
 num_strata = 25
+key_pattern = None
 
 def process(frame):
     paused = False
@@ -18,15 +19,24 @@ def process(frame):
     frame = cv.resize(frame, None, fx=scale, fy=scale)
     (height, width, channels) = frame.shape
     global num_strata
+    global key_pattern
+    global vote_verdict
+
 
     if vote_verdict is None:
         scan(frame)
-    else:
+
+    if vote_verdict is not None:
+        if key_pattern is None:
+            key_pattern = get_pattern()
+    
         num_votes, layers = votes[vote_verdict]
+        print(key_pattern)
+
         for strata_num, layer in layers.items():
             step = (height // 2) / (num_strata + 1)
             y_pos = math.floor(step * (strata_num + 1)) + (height // 2)
-            draw_terrain(frame, layer, y_pos, (255,0,0))
+            draw_terrain(frame, layer, y_pos, (255,0,0), pattern=key_pattern)
 
     cv.imshow("frame", frame)
 
@@ -61,13 +71,39 @@ def scan(frame, num_strata = 25, batch = 5):
                 break
 
     scan_progress = (scan_progress + 1) % (len(layers) // batch)
+
+
+def get_pattern():
+    global votes
+    global vote_verdict
+    notes = "C D E F G A B".split(" ")
+
+    [num_votes, strata] = votes[vote_verdict]
+    strata_nums = list(strata.keys())
+    strata_nums.sort()
+    sample_stratum = strata[strata_nums[0]]
+
+    index_of_pattern = find_pattern(sample_stratum)
+    
+    print(index_of_pattern)
+    if index_of_pattern == -1:
+        return None
+    order = notes[index_of_pattern % len(notes):] + notes[:index_of_pattern % len(notes)]
+    print(order)
+    return order
+
     
 
-def draw_terrain(frame, terrain, y_pos, color):
-    for (start, end) in terrain:
+def draw_terrain(frame, terrain, y_pos, color, pattern=None):
+    for idx, (start, end) in enumerate(terrain):
+        if pattern is not None:
+            cv.putText(frame, pattern[idx % len(pattern)], (start, y_pos), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+            continue
+            
         cv.rectangle(frame, (start, y_pos - 5), (end, y_pos + 5), color, 2)
 
-    cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
+    if pattern is None:
+        cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
 
 
 def stratify(frame, max_layers, top = 0, offset = 0, limit = None, reverse = False):
@@ -123,7 +159,60 @@ def adaptive_quantization(image):
 
 
 def is_valid(plateaus):
-    return is_uniform(plateaus) and len(plateaus) >= 7
+    has_min_key_count = len(plateaus) >= 8
+    if not has_min_key_count:
+        return False
+    
+    # index_of_pattern = find_pattern(plateaus)
+    # if index_of_pattern < 0:
+    #     return False
+    
+    if not is_uniform(plateaus):
+        return False
+
+    return True
+
+
+def find_pattern(plateaus, gap_thresh = 4):
+    keyboard = "101011010101" + "101011010101"
+    first_index_of_pattern = -1
+
+    pattern = ""
+
+    for i in range(0, 7):
+        (curr_start, curr_end) = plateaus[i]
+        (next_start, next_end) = plateaus[i + 1]
+
+        if (next_start - curr_end > gap_thresh):
+            pattern += "10"
+        else:
+            pattern += "1"
+
+    print(pattern)
+    return keyboard.find(pattern)
+
+    # for i in range(0, min(8, len(plateaus) - 8)):
+    #     pattern = ""
+
+    #     for w in range(window_start, window_end - 1):
+    #         (curr_start, curr_end) = plateaus[w]
+    #         (next_start, next_end) = plateaus[w + 1]
+
+    #         if (next_start - curr_end > gap_thresh):
+    #             pattern += "10"
+    #         else:
+    #             pattern += "1"
+
+    #     if pattern == valid_pattern:
+    #         first_index_of_pattern = i
+    #         break
+
+    #     print(pattern)
+
+    #     window_start += 1
+    #     window_end += 1
+
+    return first_index_of_pattern
 
 
 def is_uniform(terrain, buffer = 1, scale_thresh = 1.5, pixel_thresh = 8):
@@ -198,7 +287,7 @@ def cast_vote(votes, plateaus, strata_num):
     return (votes[choice][0])
 
 
-# setup_video_capture(process, "videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
+setup_video_capture(process, "videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
 # setup_video_capture(process, "videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
 # setup_video_capture(process, "videos/Van Gogh by Virginio Aiello, On Piano - [Piano Tutorial] (Synthesia - SeeMusic) [2ESlH-fwxIc].webm")
-setup_video_capture(process, "videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
+# setup_video_capture(process, "videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
