@@ -55,11 +55,12 @@ def scan(frame, num_strata = 25, batch = 5):
     for i in range(batch * scan_progress, batch * (scan_progress + 1)):
         layer = layers[i]
         valleys, plateaus = adaptive_quantization(layer)
+        # plateaus, valleys = adaptive_quantization(layer)
         y_pos = positions[i]
-        valid = is_valid(plateaus)
+        valid = is_valid(plateaus, valleys)
 
-        color = (0,255,0) if valid else (0,0,255)
-        draw_terrain(frame, plateaus, y_pos, color)
+        draw_terrain(frame, plateaus, y_pos, color = (0,255,0) if valid else (0,0,255))
+        draw_terrain(frame, valleys, y_pos, color = (255,0,0) if valid else (0,0,255))
 
         if valid:
             num_votes = cast_vote(votes, plateaus, i)
@@ -91,13 +92,12 @@ def get_pattern():
     order = notes[index_of_pattern % len(notes):] + notes[:index_of_pattern % len(notes)]
     print(order)
     return order
-
     
 
 def draw_terrain(frame, terrain, y_pos, color, pattern=None):
     for idx, (start, end) in enumerate(terrain):
         if pattern is not None:
-            cv.putText(frame, pattern[idx % len(pattern)], (start, y_pos), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+            cv.putText(frame, pattern[idx % len(pattern)], (start, y_pos), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
             continue
             
         cv.rectangle(frame, (start, y_pos - 5), (end, y_pos + 5), color, 2)
@@ -158,8 +158,8 @@ def adaptive_quantization(image):
     return (valleys, plateaus)
 
 
-def is_valid(plateaus):
-    has_min_key_count = len(plateaus) >= 8
+def is_valid(plateaus, valleys):
+    has_min_key_count = len(plateaus) >= 7
     if not has_min_key_count:
         return False
     
@@ -167,7 +167,7 @@ def is_valid(plateaus):
     # if index_of_pattern < 0:
     #     return False
     
-    if not is_uniform(plateaus):
+    if not is_uniform(plateaus) or not is_uniform(valleys):
         return False
 
     return True
@@ -175,7 +175,6 @@ def is_valid(plateaus):
 
 def find_pattern(plateaus, gap_thresh = 4):
     keyboard = "101011010101" + "101011010101"
-    first_index_of_pattern = -1
 
     pattern = ""
 
@@ -188,39 +187,21 @@ def find_pattern(plateaus, gap_thresh = 4):
         else:
             pattern += "1"
 
-    print(pattern)
-    return keyboard.find(pattern)
+    # print(pattern)
+    index_of_pattern = keyboard.find(pattern)
+    # print(index_of_pattern)
+    offset = sum([int(val) for val in keyboard[:index_of_pattern]])
+    # print(offset)
 
-    # for i in range(0, min(8, len(plateaus) - 8)):
-    #     pattern = ""
-
-    #     for w in range(window_start, window_end - 1):
-    #         (curr_start, curr_end) = plateaus[w]
-    #         (next_start, next_end) = plateaus[w + 1]
-
-    #         if (next_start - curr_end > gap_thresh):
-    #             pattern += "10"
-    #         else:
-    #             pattern += "1"
-
-    #     if pattern == valid_pattern:
-    #         first_index_of_pattern = i
-    #         break
-
-    #     print(pattern)
-
-    #     window_start += 1
-    #     window_end += 1
-
-    return first_index_of_pattern
+    return offset
 
 
 def is_uniform(terrain, buffer = 1, scale_thresh = 1.5, pixel_thresh = 8):
     shortest = math.inf
     longest = 0.0
 
-    if len(terrain) <= 2 * buffer + 1:
-        return False
+    # if len(terrain) <= 2 * buffer + 1:
+    #     return False
 
     # # we don't know the full extent of the first and last runs, so we exclude them from consideration
     for i in range(buffer, len(terrain) - buffer):
@@ -239,7 +220,7 @@ def is_uniform(terrain, buffer = 1, scale_thresh = 1.5, pixel_thresh = 8):
     return True
 
 
-def get_terrain(labels, min_plat_size = 4, min_valley_size = 2):
+def get_terrain(labels, min_plat_size = 6, min_valley_size = 6):
     terrain = labels.flatten()
     plateau_label, _ = stats.mode(terrain)
     in_valley = False
@@ -287,7 +268,7 @@ def cast_vote(votes, plateaus, strata_num):
     return (votes[choice][0])
 
 
-setup_video_capture(process, "videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
+# setup_video_capture(process, "videos/Machine Love - Jamie Paige (Piano Tutorial) [PO0gU5QVKFk].webm")
 # setup_video_capture(process, "videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
 # setup_video_capture(process, "videos/Van Gogh by Virginio Aiello, On Piano - [Piano Tutorial] (Synthesia - SeeMusic) [2ESlH-fwxIc].webm")
-# setup_video_capture(process, "videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
+setup_video_capture(process, "videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
