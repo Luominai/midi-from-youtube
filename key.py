@@ -10,18 +10,28 @@ class Key:
         self.on_release = on_release
         self.is_pressed = False
         self.base_color = get_average_color(frame, strata)
-        self.history = np.full(shape=(len(strata),3,3), fill_value=self.base_color)
+        self.history = np.full(shape=(len(strata),1,3), fill_value=self.base_color)
         self.distance_threshold = 120
 
 
 
     def process(self, frame):
+
+
+        print("=====================")
         for idx, (start, end, y_pos, *rest) in enumerate(self.strata):
             pixels = frame[y_pos][start : end]
+            strata_average = np.average(pixels, axis=0)
+            strata_historical_average = np.average(self.history[idx], axis=0)
             self.history[idx] = np.roll(self.history[idx], 1, axis=0)
             self.history[idx][0] = np.average(pixels, axis=0)
 
-        print(self.history)
+            distance = get_color_distance(strata_average, strata_historical_average)
+            print(idx, distance)
+
+        # distances = np.average(self.history)
+        # print(distances)
+        # print(self.history)
 
         # current_color = get_average_color(frame, self.strata)
         # historical_average = np.average(self.history, axis=0, weights=[4,2,1])
