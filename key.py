@@ -3,38 +3,47 @@ import numpy as np
 
 class Key:
     def __init__(self, frame, strata, note, octave, on_press, on_release):
-        self.strata = strata
+        self.strata = strata[np.argsort(strata["y_pos"])]
         self.note = note
         self.octave = octave
         self.on_press = on_press
         self.on_release = on_release
         self.is_pressed = False
         self.base_color = get_average_color(frame, strata)
-        self.history = np.full(shape=(5,3), fill_value=self.base_color)
-        self.distance_threshold = 150
+        self.history = np.full(shape=(len(strata),3,3), fill_value=self.base_color)
+        self.distance_threshold = 120
 
 
 
     def process(self, frame):
-        current_color = get_average_color(frame, self.strata)
-        historical_average = np.average(self.history, axis=0)
-        color_distance = get_color_distance(historical_average, current_color)
+        for idx, (start, end, y_pos, *rest) in enumerate(self.strata):
+            pixels = frame[y_pos][start : end]
+            self.history[idx] = np.roll(self.history[idx], 1, axis=0)
+            self.history[idx][0] = np.average(pixels, axis=0)
 
-        if not self.is_pressed:
-            if color_distance > self.distance_threshold:
-                self.on_press(self)
-                self.is_pressed = True
-            else:
-                self.history = np.roll(self.history, 1, axis=0)
-                self.history[0] = current_color
+        print(self.history)
 
-        if self.is_pressed:
-            if color_distance < self.distance_threshold:
-                self.on_release(self)
-                self.is_pressed = False
+        # current_color = get_average_color(frame, self.strata)
+        # historical_average = np.average(self.history, axis=0, weights=[4,2,1])
+        # color_distance = get_color_distance(historical_average, current_color)
 
         # print("average:", historical_average)
         # print("current:", current_color)
+        # print("dist:", color_distance)
+
+        # if not self.is_pressed:
+        #     if color_distance > self.distance_threshold:
+        #         self.on_press(self)
+        #         self.is_pressed = True
+        #     else:
+        #         self.history = np.roll(self.history, 1, axis=0)
+        #         self.history[0] = current_color
+
+        # if self.is_pressed:
+        #     if color_distance < self.distance_threshold:
+        #         self.on_release(self)
+        #         self.is_pressed = False
+
         # print(self.note, self.octave)
         # print("dist:", color_distance)
         # print("angle:", color_angle)
@@ -94,3 +103,4 @@ def get_angle_between(v1, v2):
     v2_unit = get_unit_vector(v2)
 
     return np.arccos(np.clip(np.dot(v1_unit, v2_unit), -1.0, 1.0))
+

@@ -46,13 +46,27 @@ class KeyboardParser2:
             keys_by_octave_and_note = sort_layers(list(layers.values()))
             for octave, key in enumerate(keys_by_octave_and_note):
                 for note, strata in key.items():
+
+                    strata = list(map(tuple, strata))
+                    strata = np.array(strata, dtype=[
+                        ("start", "i2"),
+                        ("end", "i2"),
+                        ("y_pos", "i2"),
+                        ("is_valley", "bool"),
+                        ("note", "U2"),
+                        ("octave", "i1")
+                    ])
+                    print(strata)
+
                     self.keys.append(Key(frame, strata, note, octave, 
                                          lambda a: print("pressed", a.note + str(a.octave)), 
                                          lambda a: print("released", a.note + str(a.octave))))
 
         if len(self.keys) != 0:
             for key in self.keys:
-                key.process(frame)
+                if key.note == "F#" and key.octave == 4:
+                    key.process(frame)
+
 
         cv.imshow("frame", frame)
         return paused

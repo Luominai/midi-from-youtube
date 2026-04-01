@@ -63,3 +63,5 @@ So, we want to subtract 512 * (SB / 2 - 1) from the Middle Left Point
 
 The middle left point is stored in t5
 We want to subtract 512 * (SB / 2 - 1) from t5
+
+A key is activated if there is a spike in color distance across all strata, 
