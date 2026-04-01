@@ -10,24 +10,92 @@ class Key:
         self.on_release = on_release
         self.is_pressed = False
         self.base_color = get_average_color(frame, strata)
-        self.history = np.full(shape=(len(strata),1,3), fill_value=self.base_color)
+        self.history = np.full(shape=(len(strata),3,3), fill_value=self.base_color)
+        self.vote_threshold = 10
+        self.current_votes = 0
+        self.vote_finished = False
+        self.verdict = None
         self.distance_threshold = 120
 
 
-
     def process(self, frame):
+        num_activations = 0
 
-
-        print("=====================")
+        # print("========" + self.note + str(self.octave) + "========")
         for idx, (start, end, y_pos, *rest) in enumerate(self.strata):
             pixels = frame[y_pos][start : end]
             strata_average = np.average(pixels, axis=0)
-            strata_historical_average = np.average(self.history[idx], axis=0)
-            self.history[idx] = np.roll(self.history[idx], 1, axis=0)
-            self.history[idx][0] = np.average(pixels, axis=0)
 
-            distance = get_color_distance(strata_average, strata_historical_average)
-            print(idx, distance)
+            if self.vote_finished and self.verdict is not None:
+                color_distance = get_color_distance(strata_average, self.verdict[idx])
+                # print(color_distance)
+                if color_distance > self.distance_threshold:
+                    num_activations += 1
+                continue
+
+            if not self.vote_finished:
+                distances = []
+                self.history[idx] = np.roll(self.history[idx], 1, axis=0)
+                self.history[idx][0] = np.average(pixels, axis=0)
+                strata_historical_average = np.average(self.history[idx], axis=0)
+
+                distance = get_color_distance(strata_average, strata_historical_average)
+                distances.append(distance)
+                # print(idx, distance)
+
+                # TODO: Each strata needs to decide independently
+                if np.average(distances) < 1:
+                    self.current_votes += 1
+                    # print("votes:", self.current_votes)
+                else:
+                    self.current_votes = 0
+                    # print('reset')
+
+                if self.current_votes > (self.vote_threshold * len(self.strata)):
+                    self.vote_finished = True
+                    self.verdict = self.history
+                    # print("decided:", self.history)
+
+        if self.verdict is None:
+            return
+
+        # print(num_activations, len(self.strata))
+        if not self.is_pressed and num_activations >= 0.6 * len(self.strata):
+            self.is_pressed = True
+            self.on_press(self)
+
+        if self.is_pressed and num_activations < 0.6 * len(self.strata):
+            self.is_pressed = False
+            self.on_release(self)
+
+        # if not self.vote_finished:
+        #     print("=====================")
+        #     distances = []
+
+        #     for idx, (start, end, y_pos, *rest) in enumerate(self.strata):
+        #         pixels = frame[y_pos][start : end]
+        #         strata_average = np.average(pixels, axis=0)
+        #         strata_historical_average = np.average(self.history[idx], axis=0)
+        #         self.history[idx] = np.roll(self.history[idx], 1, axis=0)
+        #         self.history[idx][0] = np.average(pixels, axis=0)
+
+        #         distance = get_color_distance(strata_average, strata_historical_average)
+        #         distances.append(distance)
+        #         print(idx, distance)
+
+        #     if np.average(distances) < 1:
+        #         self.current_votes += 1
+        #         print("votes:", self.current_votes)
+        #     else:
+        #         self.current_votes = 0
+        #         print('reset')
+
+        #     if self.current_votes > self.vote_threshold:
+        #         self.vote_finished = True
+        #         print("decided:", self.history)
+
+        
+
 
         # distances = np.average(self.history)
         # print(distances)

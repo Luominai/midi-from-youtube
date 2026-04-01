@@ -62,8 +62,9 @@ class KeyboardParser2:
 
         if len(self.keys) != 0:
             for key in self.keys:
-                if key.note == "F#" and key.octave == 4:
-                    key.process(frame)
+                key.process(frame)
+                # if key.note == "D" and key.octave == 1:
+                #     key.process(frame)
 
 
         cv.imshow("frame", frame)
