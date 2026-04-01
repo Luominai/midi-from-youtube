@@ -5,6 +5,7 @@ from cv2.typing import MatLike
 import numpy as np
 from scipy import stats
 from setup import setup_video_capture
+from key import Key
 
 
 class KeyboardParser2:
@@ -16,6 +17,7 @@ class KeyboardParser2:
         self.num_strata = 25
         self.batch = 5
         self.key_pattern = None
+        self.keys = []
 
 
     def process(self, frame):
@@ -30,7 +32,7 @@ class KeyboardParser2:
             self.vote_verdict = scan(frame, self.batch, self.num_strata, self.scan_progress, self.vote_threshold, self.votes)
             self.scan_progress = (self.scan_progress + 1) % (self.num_strata // self.batch)
 
-        if self.vote_verdict is not None:
+        if self.vote_verdict is not None and len(self.keys) == 0:
             if self.key_pattern is None:
                 self.key_pattern = get_pattern(self.votes, self.vote_verdict)
         
@@ -38,13 +40,26 @@ class KeyboardParser2:
 
             for strata_num, layer in layers.items():
                 [valleys, plateaus, full_survey] = layer
+                label_terrain(full_survey, pattern=self.key_pattern)
+                draw_terrain(frame, full_survey, color=None)
 
-                step = (height // 2) / (self.num_strata + 1)
-                y_pos = math.floor(step * (strata_num + 1)) + (height // 2)
-                draw_terrain(frame, full_survey, y_pos, (255,0,0), pattern=self.key_pattern)
+            keys_by_octave_and_note = sort_layers(list(layers.values()))
+            for octave, key in enumerate(keys_by_octave_and_note):
+                for note, strata in key.items():
+                    self.keys.append(Key(frame, strata, note, octave, 
+                                         lambda a: print("pressed", a.note + str(a.octave)), 
+                                         lambda a: print("released", a.note + str(a.octave))))
+
+        if len(self.keys) != 0:
+            for key in self.keys:
+                key.process(frame)
 
         cv.imshow("frame", frame)
         return paused
+    
+
+def print_key(key):
+    print(key.note)
 
     
 def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_threshold: int, votes: dict) -> int | None:
@@ -82,12 +97,9 @@ def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_
 
     for i in range(batch_size * batch_num, batch_size * (batch_num + 1)):
         layer = layers[i]
-        valleys, plateaus, full_survey = adaptive_quantization(layer)
         y_pos = positions[i]
+        valleys, plateaus, full_survey = adaptive_quantization(layer, int(y_pos))
         valid = is_valid(plateaus, valleys)
-
-        draw_terrain(frame, plateaus, y_pos, color = (0,255,0) if valid else (0,0,255))
-        draw_terrain(frame, valleys, y_pos, color = (255,0,0) if valid else (0,0,255))
 
         if valid:
             num_votes = cast_vote(valleys, plateaus, full_survey, i, votes)
@@ -97,6 +109,9 @@ def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_
                 vote_verdict = len(plateaus)
                 print("vote decided for", vote_verdict)
                 break
+
+        draw_terrain(frame, plateaus, color = (0,255,0) if valid else (0,0,255))
+        draw_terrain(frame, valleys, color = (255,0,0) if valid else (0,0,255))
 
     return vote_verdict
 
@@ -138,7 +153,7 @@ def get_pattern(votes, vote_verdict) -> Sequence[str] | None:
     return order
     
 
-def draw_terrain(frame, terrain, y_pos, color, pattern=None):
+def draw_terrain(frame, terrain, color):
     """
     Draws rectangles representing the start and end positions of every tuple in the terrain. \n
     Rectangles have inflated heights for visibility. \n
@@ -163,34 +178,56 @@ def draw_terrain(frame, terrain, y_pos, color, pattern=None):
     pattern: Sequence( str ) = ```None```
         a list of strings representing the notes of the first 7 white keys in order
     """
-
-    plateau_index = 0
-    current_octave = 0
     octave_colors = [(180,0,0),(0,180,0),(0,0,180),(180,180,0),(0,180,180),(180,0,180)]
 
-    for idx, (start, end, is_valley, note, octave) in enumerate(terrain):
-        if pattern is not None:
-            note = pattern[plateau_index % len(pattern)]
-
-            if note == "C" and idx > 0:
-                current_octave += 1
-
-            octave = current_octave
+    for idx, (start, end, y_pos, is_valley, note, octave) in enumerate(terrain):
+        if note != "?" and octave > -1:
             octave_color = octave_colors[octave % len(octave_colors)]
-    
-            if is_valley:
-                note = pattern[(plateau_index - 1) % len(pattern)] + "#"
-                octave_color = (octave_color[0] + 40, octave_color[1] + 40, octave_color[2] + 40)
-            else:
-                plateau_index += 1
-
+            octave_color = (octave_color[0] + 40, octave_color[1] + 40, octave_color[2] + 40)
             cv.putText(frame, note, (start, y_pos), cv.FONT_HERSHEY_SIMPLEX, 0.5, octave_color, 1)
-            continue
-            
-        cv.rectangle(frame, (start, y_pos - 5), (end, y_pos + 5), color, 2)
 
-    if pattern is None:
-        cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
+        if color is not None:
+            cv.rectangle(frame, (start, y_pos - 5), (end, y_pos + 5), color, 2)
+
+            if idx == len(terrain) - 1:
+                cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
+
+
+def label_terrain(terrain, pattern):
+    plateau_index = 0
+    current_octave = 0
+
+    # (0: start, 1: end, 2: y_pos, 3: is_valley, 4: note, 5: octave) = terrain
+    for idx, ground in enumerate(terrain):
+        in_valley = ground[3]
+        note = pattern[plateau_index % len(pattern)]
+        note = pattern[(plateau_index - 1) % len(pattern)] + "#" if in_valley else note
+
+        if note == "C" and idx > 0:
+            current_octave += 1
+
+        ground[4] = note
+        ground[5] = current_octave
+
+        if not in_valley:
+            plateau_index += 1
+
+
+def sort_layers(layers):
+    terrain_by_octave_and_note = []
+
+    for [valleys, plateaus, full_survey] in layers:
+        for idx, (start, end, y_pos, is_valley, note, octave) in enumerate(full_survey):
+            if len(terrain_by_octave_and_note) <= octave:
+                for i in range(octave - len(terrain_by_octave_and_note) + 1):
+                    terrain_by_octave_and_note.append({})
+
+            if note not in terrain_by_octave_and_note[octave]:
+                terrain_by_octave_and_note[octave][note] = []
+
+            terrain_by_octave_and_note[octave][note].append(full_survey[idx])
+
+    return terrain_by_octave_and_note
 
 
 def stratify(frame, max_layers, top = 0, offset = 0, limit = None, reverse = False):
@@ -229,18 +266,18 @@ def quantize_colors(frame, num_colors):
     return (colors, best_labels)
 
 
-def adaptive_quantization(frame):
-    (colors, labels) = quantize_colors(frame, 3)
-    valleys, plateaus, full_survey = get_terrain(labels)
+def adaptive_quantization(stratum, y_pos):
+    (colors, labels) = quantize_colors(stratum, 3)
+    valleys, plateaus, full_survey = get_terrain(labels, y_pos)
 
     # if plateau are not uniform, retry using a different k
     if not is_uniform(plateaus):
-        (colors, labels) = quantize_colors(frame, 2)
-        valleys, plateaus, full_survey = get_terrain(labels)
+        (colors, labels) = quantize_colors(stratum, 2)
+        valleys, plateaus, full_survey = get_terrain(labels, y_pos)
 
     if not is_uniform(plateaus):
-        (colors, labels) = quantize_colors(frame, 4)
-        valleys, plateaus, full_survey = get_terrain(labels)
+        (colors, labels) = quantize_colors(stratum, 4)
+        valleys, plateaus, full_survey = get_terrain(labels, y_pos)
 
     return (valleys, plateaus, full_survey)
 
@@ -299,7 +336,7 @@ def is_uniform(terrain, buffer = 1, scale_thresh = 1.5, pixel_thresh = 8):
     return True
 
 
-def get_terrain(labels, min_plat_size = 6, min_valley_size = 6):
+def get_terrain(labels, y_pos, min_plat_size = 6, min_valley_size = 6):
     """
     Given a list of labels, returns 3 lists of tuples. \n
     The first 2 lists represent valley and plateau features. The third contains tuples from both features in order. \n
@@ -326,7 +363,7 @@ def get_terrain(labels, min_plat_size = 6, min_valley_size = 6):
             in_valley = True
             start_of_valley = i
             if (i - start_of_plateau) >= min_plat_size:
-                entry = [start_of_plateau, i, False, "?", -1]
+                entry = [start_of_plateau, i, y_pos, False, "?", -1]
                 plateaus.append(entry)
                 full_survey.append(entry)
 
@@ -334,16 +371,16 @@ def get_terrain(labels, min_plat_size = 6, min_valley_size = 6):
             in_valley = False
             start_of_plateau = i
             if (i - start_of_valley) >= min_valley_size:
-                entry = [start_of_valley, i, True, "?", -1]
+                entry = [start_of_valley, i, y_pos, True, "?", -1]
                 valleys.append(entry)
                 full_survey.append(entry)
 
     if in_valley and (len(terrain) - start_of_valley) >= min_valley_size:
-        entry = [start_of_valley, len(terrain), True, "?", -1]
+        entry = [start_of_valley, len(terrain), y_pos, True, "?", -1]
         valleys.append(entry)
         full_survey.append(entry)
     elif not in_valley and (len(terrain) - start_of_plateau) >= min_plat_size:
-        entry = [start_of_plateau, len(terrain), False, "?", -1]
+        entry = [start_of_plateau, len(terrain), y_pos, False, "?", -1]
         plateaus.append(entry)
         full_survey.append(entry)
 
