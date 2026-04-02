@@ -112,13 +112,13 @@ def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_
         layer = layers[i]
         y_pos = positions[i]
         valleys, plateaus, full_survey = adaptive_quantization(layer, int(y_pos))
-        valid = is_valid(plateaus, valleys)
+        valid = is_valid(plateaus, valleys, full_survey)
 
         if valid:
             num_votes = cast_vote(valleys, plateaus, full_survey, i, votes)
-            # print("strata", str(i), ":", len(plateaus), num_votes)
+            print("strata", str(i), ":", len(plateaus), num_votes)
 
-            if num_votes >= vote_threshold and find_pattern(plateaus) != -1:
+            if num_votes >= vote_threshold and has_pattern(full_survey):
                 vote_verdict = len(plateaus)
                 print("vote decided for", vote_verdict)
                 break
@@ -280,36 +280,52 @@ def quantize_colors(frame, num_colors):
 
 
 def adaptive_quantization(stratum, y_pos):
-    (colors, labels) = quantize_colors(stratum, 3)
+    
+    (colors, labels) = quantize_colors(stratum, 2)
     valleys, plateaus, full_survey = get_terrain(labels, y_pos)
 
-    # if plateau are not uniform, retry using a different k
-    if not is_uniform(plateaus):
-        (colors, labels) = quantize_colors(stratum, 2)
-        valleys, plateaus, full_survey = get_terrain(labels, y_pos)
+    # print("==================================")
+    for i in range(2,5):
+        uniform = is_uniform(plateaus) 
+        pattern = has_pattern(full_survey)
+        valid = is_valid(plateaus, valleys, full_survey)
+        # print(y_pos, "k", i, "is_uniform:", uniform, "has_pattern:", pattern, "valid", valid)
 
-    if not is_uniform(plateaus):
-        (colors, labels) = quantize_colors(stratum, 4)
-        valleys, plateaus, full_survey = get_terrain(labels, y_pos)
+        if not is_valid(plateaus, valleys, full_survey):
+            (colors, labels) = quantize_colors(stratum, i)
+            valleys, plateaus, full_survey = get_terrain(labels, y_pos)
+        else:
+            break
 
     return (valleys, plateaus, full_survey)
 
 
-def is_valid(plateaus, valleys):
+def is_valid(plateaus, valleys, full_survey):
+    # arbitrary minimum but I don't see any piano tutorials with less than a full octave
     has_min_key_count = len(plateaus) >= 7
     if not has_min_key_count:
         return False
     
-    if not is_uniform(plateaus) or not is_uniform(valleys):
+    # check if the terrain has a keyboard pattern
+    if not has_pattern(full_survey):
         return False
+
+    # # check if the terrain has roughly similar size
+    # if not is_uniform(plateaus):
+    #     return False
 
     return True
 
 
 def find_pattern(plateaus, gap_thresh = 4):
+    """
+    Returns the index of the first octave starting at C. Used for labeling a known keyboard
+    """
     keyboard = "101011010101" + "101011010101"
-
     pattern = ""
+
+    if (len(plateaus) < 8):
+        return -1
 
     for i in range(0, 7):
         (curr_start, curr_end, *rest) = plateaus[i]
@@ -328,7 +344,45 @@ def find_pattern(plateaus, gap_thresh = 4):
     return offset
 
 
+def has_pattern(full_survey):
+    """
+    Checks if the plateaus and valleys of the terrain are arranged in a keyboard pattern. Use to help check if a keyset is a keyboard
+    """
+
+    if (len(full_survey) < 12):
+        return False
+    
+    # if all plateaus and no valleys, it is a valid pattern only if the plateaus are also evenly spaced
+    if all([not is_valley for (start, end, y_pos, is_valley, *rest) in full_survey]):
+        return is_uniform(full_survey)
+    
+    keyboard = "101011010101" + "101011010101"
+    pattern = ""
+
+    for i in range(0, 12):
+        (start, end, y_pos, is_valley, *rest) = full_survey[i]
+        if is_valley:
+            pattern += "0"
+        else:
+            pattern += "1"
+
+    index_of_pattern = keyboard.find(pattern)
+    if index_of_pattern == -1:
+        return False
+    
+    for i in range(12, len(full_survey)):
+        (start, end, y_pos, is_valley, *rest) = full_survey[i]
+        expected = "0" if is_valley else "1"
+        if keyboard[(index_of_pattern + i) % len(keyboard)] != expected:
+            return False
+        
+    return True
+
+
 def is_uniform(terrain, buffer = 1, scale_thresh = 1.5, pixel_thresh = 8):
+    """
+    Checks if all terrain is siilar in width
+    """
     shortest = math.inf
     longest = 0.0
 
