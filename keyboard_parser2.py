@@ -5,7 +5,7 @@ from cv2.typing import MatLike
 import numpy as np
 from scipy import stats
 from setup import setup_video_capture
-from key import Key
+import key as Key
 
 
 class KeyboardParser2:
@@ -56,7 +56,7 @@ class KeyboardParser2:
                         ("octave", "i1")
                     ])
 
-                    self.keys.append(Key(frame, strata, note, octave, 
+                    self.keys.append(Key.Key(frame, strata, note, octave, 
                                          lambda a: print("pressed", a.note + str(a.octave)), 
                                          lambda a: print("released", a.note + str(a.octave))))
 
@@ -71,10 +71,12 @@ class KeyboardParser2:
         return paused
     
 
+
 def print_key(key):
     print(key.note)
 
-    
+
+
 def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_threshold: int, votes: dict) -> int | None:
     """
     Scans a frame for keyboard keys and votes according to the number of detected white keys. \n
@@ -129,6 +131,7 @@ def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_
     return vote_verdict
 
 
+
 def get_pattern(votes, vote_verdict) -> Sequence[str] | None:
     """
     Iterates over the stratum with the lowest y-value (meaning higher up on the image) to determine the order of white notes for all strata \n
@@ -166,7 +169,8 @@ def get_pattern(votes, vote_verdict) -> Sequence[str] | None:
     return order
     
 
-def draw_terrain(frame, terrain, color):
+
+def draw_terrain(frame, terrain, color, size=5, draw_text=True):
     """
     Draws rectangles representing the start and end positions of every tuple in the terrain. \n
     Rectangles have inflated heights for visibility. \n
@@ -194,16 +198,17 @@ def draw_terrain(frame, terrain, color):
     octave_colors = [(180,0,0),(0,180,0),(0,0,180),(180,180,0),(0,180,180),(180,0,180)]
 
     for idx, (start, end, y_pos, is_valley, note, octave) in enumerate(terrain):
-        if note != "?" and octave > -1:
+        if draw_text and note != "?" and octave > -1:
             octave_color = octave_colors[octave % len(octave_colors)]
             octave_color = (octave_color[0] + 40, octave_color[1] + 40, octave_color[2] + 40)
             cv.putText(frame, note, (start, y_pos), cv.FONT_HERSHEY_SIMPLEX, 0.5, octave_color, 1)
 
         if color is not None:
-            cv.rectangle(frame, (start, y_pos - 5), (end, y_pos + 5), color, 2)
+            cv.rectangle(frame, (start, y_pos - size), (end, y_pos + size), color, 2)
 
-            if idx == len(terrain) - 1:
-                cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
+            # if idx == len(terrain) - 1:
+            #     cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
+
 
 
 def label_terrain(terrain, pattern):
@@ -226,6 +231,7 @@ def label_terrain(terrain, pattern):
             plateau_index += 1
 
 
+
 def sort_layers(layers):
     terrain_by_octave_and_note = []
 
@@ -243,6 +249,7 @@ def sort_layers(layers):
     return terrain_by_octave_and_note
 
 
+
 def stratify(frame, max_layers, top = 0, offset = 0, limit = None, reverse = False):
     limit = max_layers if limit is None else limit
     (height, width, channels) = frame.shape
@@ -257,6 +264,7 @@ def stratify(frame, max_layers, top = 0, offset = 0, limit = None, reverse = Fal
         layers[i] = frame[y_pos]
 
     return layers, positions
+
 
 
 def quantize_colors(frame, num_colors):
@@ -277,6 +285,7 @@ def quantize_colors(frame, num_colors):
     colors = np.uint8(centers)
 
     return (colors, best_labels)
+
 
 
 def adaptive_quantization(stratum, y_pos):
@@ -300,6 +309,7 @@ def adaptive_quantization(stratum, y_pos):
     return (valleys, plateaus, full_survey)
 
 
+
 def is_valid(plateaus, valleys, full_survey):
     # arbitrary minimum but I don't see any piano tutorials with less than a full octave
     has_min_key_count = len(plateaus) >= 7
@@ -315,6 +325,7 @@ def is_valid(plateaus, valleys, full_survey):
     #     return False
 
     return True
+
 
 
 def find_pattern(plateaus, gap_thresh = 4):
@@ -344,6 +355,7 @@ def find_pattern(plateaus, gap_thresh = 4):
     return offset
 
 
+
 def has_pattern(full_survey):
     """
     Checks if the plateaus and valleys of the terrain are arranged in a keyboard pattern. Use to help check if a keyset is a keyboard
@@ -352,9 +364,9 @@ def has_pattern(full_survey):
     if (len(full_survey) < 12):
         return False
     
-    # if all plateaus and no valleys, it is a valid pattern only if the plateaus are also evenly spaced
-    if all([not is_valley for (start, end, y_pos, is_valley, *rest) in full_survey]):
-        return is_uniform(full_survey)
+    # # if all plateaus and no valleys, it is a valid pattern only if the plateaus are also evenly spaced
+    # if all([not is_valley for (start, end, y_pos, is_valley, *rest) in full_survey]):
+    #     return is_uniform(full_survey)
     
     keyboard = "101011010101" + "101011010101"
     pattern = ""
@@ -379,6 +391,7 @@ def has_pattern(full_survey):
     return True
 
 
+
 def is_uniform(terrain, buffer = 1, scale_thresh = 1.5, pixel_thresh = 8):
     """
     Checks if all terrain is siilar in width
@@ -401,6 +414,7 @@ def is_uniform(terrain, buffer = 1, scale_thresh = 1.5, pixel_thresh = 8):
         return False
     
     return True
+
 
 
 def get_terrain(labels, y_pos, min_plat_size = 6, min_valley_size = 6):
@@ -452,6 +466,7 @@ def get_terrain(labels, y_pos, min_plat_size = 6, min_valley_size = 6):
         full_survey.append(entry)
 
     return valleys, plateaus, full_survey
+
 
 
 # first indexed by plateau count, then by strata number

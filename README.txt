@@ -67,3 +67,8 @@ We want to subtract 512 * (SB / 2 - 1) from t5
 A key is activated if there is a spike in color distance across all strata, 
 
 Apply voting approach to finding a base color for the keys
+
+A color detection approach won't always work because of missing frames. sometimes when a key is pressed fast, there is no in-between.
+To fix this, we have to use a shape based approach. 
+In this method, we can focus only on the strata containing both black and white keys, since it seems like the length of the falling notes 
+    is only as large as those gaps

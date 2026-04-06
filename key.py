@@ -1,9 +1,22 @@
-import numpy as np
+from math import floor
 
+import numpy as np
+import keyboard_parser2 as KeyboardParser
+
+octave_colors = [(180,0,0),(0,180,0),(0,0,180),(180,180,0),(0,180,180),(180,0,180)]
 
 class Key:
     def __init__(self, frame, strata, note, octave, on_press, on_release):
         self.strata = strata[np.argsort(strata["y_pos"])]
+
+        # # move the strata upward so they are above the keyboard
+        # (x, y) = get_orientation(self.strata, scale=1.5)
+        # for idx in range(len(self.strata)):
+        #     # (start, end, y_pos, *rest)
+        #     self.strata[idx][0] -= x
+        #     self.strata[idx][1] -= x
+        #     self.strata[idx][2] -= y
+
         self.note = note
         self.octave = octave
         self.on_press = on_press
@@ -20,6 +33,7 @@ class Key:
 
     def process(self, frame):
         num_activations = 0
+        KeyboardParser.draw_terrain(frame, self.strata, octave_colors[self.octave % len(octave_colors)], size=2, draw_text=False)
 
         # print("========" + self.note + str(self.octave) + "========")
         for idx, (start, end, y_pos, *rest) in enumerate(self.strata):
@@ -181,4 +195,20 @@ def get_angle_between(v1, v2):
     v2_unit = get_unit_vector(v2)
 
     return np.arccos(np.clip(np.dot(v1_unit, v2_unit), -1.0, 1.0))
+
+
+def get_orientation(strata, scale = 1.0):
+    """
+    Returns an (x, y) pair representing the x and y diff from the top to the bottom strata
+    """
+    (top_start, top_end, top_y_pos, *top_rest) = strata[0]
+    (bottom_start, bottom_end, bottom_y_pos, *bottom_rest) = strata[-1]
+    top_center = top_start + (top_end - top_start) // 2
+    bottom_center = bottom_start + (bottom_end - bottom_start) // 2
+
+    return (
+        floor(scale * (bottom_center - top_center)), 
+        floor(scale * (bottom_y_pos - top_y_pos))
+    )
+
 
