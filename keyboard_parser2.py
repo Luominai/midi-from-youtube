@@ -295,12 +295,12 @@ def adaptive_quantization(stratum, y_pos):
 
     # print("==================================")
     for i in range(2,5):
-        uniform = is_uniform(plateaus) 
-        pattern = has_pattern(full_survey)
+        # uniform = is_uniform(plateaus) 
+        # pattern = has_pattern(full_survey)
         valid = is_valid(plateaus, valleys, full_survey)
         # print(y_pos, "k", i, "is_uniform:", uniform, "has_pattern:", pattern, "valid", valid)
 
-        if not is_valid(plateaus, valleys, full_survey):
+        if not valid:
             (colors, labels) = quantize_colors(stratum, i)
             valleys, plateaus, full_survey = get_terrain(labels, y_pos)
         else:
@@ -312,9 +312,9 @@ def adaptive_quantization(stratum, y_pos):
 
 def is_valid(plateaus, valleys, full_survey):
     # arbitrary minimum but I don't see any piano tutorials with less than a full octave
-    has_min_key_count = len(plateaus) >= 7
-    if not has_min_key_count:
-        return False
+    # has_min_key_count = len(plateaus) >= 7
+    # if not has_min_key_count:
+    #     return False
     
     # check if the terrain has a keyboard pattern
     if not has_pattern(full_survey):
