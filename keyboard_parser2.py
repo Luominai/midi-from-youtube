@@ -12,9 +12,9 @@ class KeyboardParser2:
     def __init__(self):
         self.scan_progress = 0
         self.votes = {}
-        self.vote_threshold = 60
+        self.vote_threshold = 90
         self.vote_verdict = None
-        self.num_strata = 25
+        self.num_strata = 50
         self.batch = 5
         self.key_pattern = None
         self.keys = []

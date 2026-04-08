@@ -2,21 +2,20 @@ from math import floor
 
 import numpy as np
 import keyboard_parser2 as KeyboardParser
+import cv2 as cv
 
 octave_colors = [(180,0,0),(0,180,0),(0,0,180),(180,180,0),(0,180,180),(180,0,180)]
 
 class Key:
     def __init__(self, frame, strata, note, octave, on_press, on_release):
         self.strata = strata[np.argsort(strata["y_pos"])]
-
-        # # move the strata upward so they are above the keyboard
-        # (x, y) = get_orientation(self.strata, scale=1.5)
-        # for idx in range(len(self.strata)):
-        #     # (start, end, y_pos, *rest)
-        #     self.strata[idx][0] -= x
-        #     self.strata[idx][1] -= x
-        #     self.strata[idx][2] -= y
-
+        avg_width = np.average([(start - end) for (start, end, *rest) in self.strata])
+        points = np.array([((start + end) // 2, y_pos) for (start, end, y_pos, *rest) in self.strata])
+        (vx, vy, x0, y0) = cv.fitLine(points, distType=cv.DIST_L2, param=0, reps=0.01, aeps=0.01) # type: ignore
+        scale = 200
+        x_adj = round((avg_width * vx)[0])
+        self.line_start = (floor((x0 - vx * scale)[0]) + x_adj, floor((y0 - vy * scale)[0]))
+        self.line_end = (floor((x0 + vx * scale)[0]) + x_adj, floor((y0 + vy * scale)[0]))
         self.note = note
         self.octave = octave
         self.on_press = on_press
@@ -34,6 +33,7 @@ class Key:
     def process(self, frame):
         num_activations = 0
         KeyboardParser.draw_terrain(frame, self.strata, octave_colors[self.octave % len(octave_colors)], size=2, draw_text=False)
+        cv.line(frame, self.line_start, self.line_end, (255,0,0), 1) # type: ignore
 
         # print("========" + self.note + str(self.octave) + "========")
         for idx, (start, end, y_pos, *rest) in enumerate(self.strata):
@@ -81,88 +81,6 @@ class Key:
         if self.is_pressed and num_activations < 0.6 * len(self.strata):
             self.is_pressed = False
             self.on_release(self)
-
-        # if not self.vote_finished:
-        #     print("=====================")
-        #     distances = []
-
-        #     for idx, (start, end, y_pos, *rest) in enumerate(self.strata):
-        #         pixels = frame[y_pos][start : end]
-        #         strata_average = np.average(pixels, axis=0)
-        #         strata_historical_average = np.average(self.history[idx], axis=0)
-        #         self.history[idx] = np.roll(self.history[idx], 1, axis=0)
-        #         self.history[idx][0] = np.average(pixels, axis=0)
-
-        #         distance = get_color_distance(strata_average, strata_historical_average)
-        #         distances.append(distance)
-        #         print(idx, distance)
-
-        #     if np.average(distances) < 1:
-        #         self.current_votes += 1
-        #         print("votes:", self.current_votes)
-        #     else:
-        #         self.current_votes = 0
-        #         print('reset')
-
-        #     if self.current_votes > self.vote_threshold:
-        #         self.vote_finished = True
-        #         print("decided:", self.history)
-
-        
-
-
-        # distances = np.average(self.history)
-        # print(distances)
-        # print(self.history)
-
-        # current_color = get_average_color(frame, self.strata)
-        # historical_average = np.average(self.history, axis=0, weights=[4,2,1])
-        # color_distance = get_color_distance(historical_average, current_color)
-
-        # print("average:", historical_average)
-        # print("current:", current_color)
-        # print("dist:", color_distance)
-
-        # if not self.is_pressed:
-        #     if color_distance > self.distance_threshold:
-        #         self.on_press(self)
-        #         self.is_pressed = True
-        #     else:
-        #         self.history = np.roll(self.history, 1, axis=0)
-        #         self.history[0] = current_color
-
-        # if self.is_pressed:
-        #     if color_distance < self.distance_threshold:
-        #         self.on_release(self)
-        #         self.is_pressed = False
-
-        # print(self.note, self.octave)
-        # print("dist:", color_distance)
-        # print("angle:", color_angle)
-        # self.history = np.roll(self.history, 1, axis=0)
-        # self.history[0] = current_color
-        # print(self.history)
-
-            # print(self.history)
-        # else:
-            # print(get_color_distance(historical_average, current_color))
-            # self.on_press(self)
-
-        # if self.note == "E" and self.octave == 4:
-        #     print(angle)
-
-        # color_distance = get_color_distance(current_color, self.base_color)
-        # unit_vector_distance = get_color_distance(self.base_color_unit_vector, get_unit_vector(current_color))
-
-        # if not self.is_pressed and angle > 0:
-        #     self.on_press(self)
-        #     self.is_pressed = True
-        #     # print(color_distance, unit_vector_distance)
-        #     # print(self.note + self.octave + " pressed")
-
-        # elif self.is_pressed and get_color_distance(current_color, self.base_color) < self.press_threshold:
-        #     self.on_release(self)
-        #     self.is_pressed = False
         
 
 def get_average_color(frame, strata):
@@ -212,3 +130,5 @@ def get_orientation(strata, scale = 1.0):
     )
 
 
+def as_point(stratum):
+    return (floor(stratum[0] + (stratum[1] - stratum[0]) // 2), stratum[2])
