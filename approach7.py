@@ -54,6 +54,7 @@ def process(frame):
 def binarize(frame):
     scale = 1152 / frame.shape[1]
     frame = cv.resize(frame, None, fx=scale, fy=scale)
+    frame = frame[50:150]
     gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     # threshold once
     thresh, otsu = cv.threshold(gray,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)

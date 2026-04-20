@@ -36,9 +36,11 @@ class KeyboardParser4:
             num_votes, layers = self.votes[self.vote_verdict]
             self.keys = get_keys(frame, self.votes, self.vote_verdict)
 
+        # if we have a defined set of keys
         if len(self.keys) != 0:
             for key in self.keys:
                 key.process(frame)
+
         cv.imshow("frame", frame)
         return paused
 
@@ -50,70 +52,14 @@ def resize(frame):
     return frame
 
 
-def print_key(key):
-    print(key.note)
-
-
-# returns an array of Key objects
-def get_keys(frame, votes, vote_verdict):
-    # figure out the order of keys in the layers
-    key_pattern = get_pattern(votes, vote_verdict)
-
-    # using the key pattern, label every piece of land with its note and octave
-    num_votes, layers = votes[vote_verdict]
-    for strata_num, layer in layers.items():
-        [valleys, plateaus, full_survey] = layer
-        label_terrain(full_survey, pattern=key_pattern)
-
-    # sort the land into keys labeled by octave and note
-    keys_by_octave_and_note = sort_layers(list(layers.values()))
-
-    # create Key objects out of the sorted result
-    keys = []
-    for octave, key in enumerate(keys_by_octave_and_note):
-        for note, strata in key.items():
-            strata = list(map(tuple, strata))
-            strata = np.array(strata, dtype=[
-                ("start", "i2"),
-                ("end", "i2"),
-                ("y_pos", "i2"),
-                ("is_valley", "bool"),
-                ("note", "U2"),
-                ("octave", "i1")
-            ])
-
-            keys.append(Key.Key(frame, strata, note, octave, 
-                                lambda a: print("pressed", a.note + str(a.octave)), 
-                                lambda a: print("released", a.note + str(a.octave))))
-
-    return keys
-
-
 def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_threshold: int, votes: dict) -> int | None:
     """
-    Scans a frame for keyboard keys and votes according to the number of detected white keys. \n
-    This function splits the lower half of the frame into strata and performs detection on batches of them at a time. \n
-    Returns the number of detected white keys if this iteration has made a verdict on where the keys are. Returns ```None``` otherwise.
-
-    Parameters
-    ----------
-    frame : Matlike
-        the image to scan
-    batch_size : int
-        how many strata to perform detection on at a time
-    num_strata: int
-        how many strata in total
-    batch_num: int
-        which batch to perform detection on
-    vote_threshold: int
-        how many votes are needed to make a verdict
     votes: dict
-        A dictionary with the following structure \n
         ```
         <num_keys> : [ 
             <num_votes>, 
             { 
-                <stratum_num>: [ <valleys>, <plateaus>, <full_survey> ] 
+                <stratum_num>: [ <valleys>, <plateaus>, <terrain> ] 
             } 
         ]
         ```
@@ -127,16 +73,17 @@ def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_
     for i in range(batch_size * batch_num, batch_size * (batch_num + 1)):
         layer = layers[i]
         y_pos = positions[i]
-        # thresh, binary = binarize(layer)
-        # valleys, plateaus, full_survey = get_terrain(binary, y_pos)
-        valleys, plateaus, full_survey = adaptive_binarization(layer, int(y_pos))
-        valid = is_valid(full_survey)
+        # binary = binarize(layer)
+        # valleys, plateaus, terrain = get_terrain(binary, y_pos)
+        valleys, plateaus, terrain = adaptive_binarization(layer, y_pos)
+        valid = is_valid(terrain)
 
         if valid:
-            num_votes = cast_vote(valleys, plateaus, full_survey, i, votes)
+            num_votes = cast_vote(valleys, plateaus, terrain, i, votes)
             print("strata", str(i), ":", len(plateaus), num_votes)
 
-            if num_votes >= vote_threshold and has_pattern(full_survey):
+            # if num_votes >= vote_threshold and has_pattern(terrain):
+            if num_votes >= vote_threshold:
                 vote_verdict = len(plateaus)
                 print("vote decided for", vote_verdict)
                 break
@@ -147,43 +94,139 @@ def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_
     return vote_verdict
 
 
+def stratify(frame, max_layers, top = 0):
+    (height, width, channels) = frame.shape
+    step = (height - top) / (max_layers + 1)
 
-def get_pattern(votes, vote_verdict) -> Sequence[str] | None:
-    """
-    Iterates over the stratum with the lowest y-value (meaning higher up on the image) to determine the order of white notes for all strata \n
-    Returns an array of strings representing the notes of the first 7 white keys in order. Returns ```None``` if no pattern was detected
+    layers = np.empty(shape=(max_layers, 1, frame.shape[1], 3), dtype=int)
+    positions = np.empty(shape=max_layers, dtype=int)
 
-    Parameters
-    ----------
-    votes: dict
-        A dictionary with the following structure \n
-        ```
-        <num_keys> : [ 
-            <num_votes>, 
-            { 
-                <stratum_num>: [ <valleys>, <plateaus>, <full_survey> ] 
-            } 
-        ]
-        ```
-    vote_verdict: int
-        the ```<num_keys>``` to index ```votes``` with
-    """
-    notes = "C D E F G A B".split(" ")
+    for i in range(max_layers):
+        y_pos = math.floor(step * (i + 1)) + top
+        positions[i] = y_pos
+        layers[i] = frame[y_pos]
 
-    [num_votes, strata] = votes[vote_verdict]
-    strata_nums = list(strata.keys())
-    strata_nums.sort()
-    [valleys, plateaus, full_survey] = strata[strata_nums[0]]
+    return layers, positions
 
-    index_of_pattern = find_pattern(plateaus)
+
+def adaptive_binarization(stratum, y_pos):
+    stratum = np.uint16(stratum)
+    stratum = cv.cvtColor(stratum, cv.COLOR_BGR2GRAY) # type: ignore
+
+    # Threshold once using Otsu and check if it produces a valid output
+    thresh, binary = cv.threshold(stratum, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+    valleys, plateaus, terrain = get_terrain(binary, y_pos)
+    if is_valid(terrain): return valleys, plateaus, terrain
     
-    # print(index_of_pattern)
+    # if it's not valid, we use the binary image as a mask on the original (grayscale) image
+    masked = cv.bitwise_and(binary, stratum)
+
+    # filter to keep only the pixels that survived the first thresholding
+    pixels = masked.flatten()
+    filter = pixels > 0
+    pixels = pixels[filter]
+
+    # then threshold the remaining pixels again to find an Otsu value
+    thresh, _ = cv.threshold(pixels,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+
+    # use the second Otsu value to threshold the masked image and return the result
+    ret, binary = cv.threshold(masked, thresh, 255, cv.THRESH_BINARY)
+    valleys, plateaus, terrain = get_terrain(binary, y_pos)
+    return valleys, plateaus, terrain
+
+
+# [ <start>, <end>, <y_pos>, <is_valley>, <note> = "?", octave> = -1 ]
+def get_terrain(binary_stratum, y_pos, min_plat_size = 6, min_valley_size = 6):
+    values = binary_stratum.flatten()
+    terrain = []
+    valleys = []
+    plateaus = []
+    start = 0
+
+    for i, curr in enumerate(values):
+        # if this is the first element, we can treat prev as curr so we end up ignoring it
+        prev = values[i - 1] if i > 0 else curr
+        
+        # if this pixel is the same as the previous, ignore
+        if curr == prev:
+            continue
+
+        # when the pixel value changes, record the land between now and the previous change. the land is a valley if its pixels are black
+        is_valley = prev == 0
+        meets_min_size = (is_valley and i - start >= min_valley_size) or (not is_valley and i - start >=min_plat_size)
+        
+        # if there isn't enough land, we'll skip over this section
+        if meets_min_size:
+            land = [start, i, y_pos, is_valley, "?", -1]
+            terrain.append(land)
+            valleys.append(land) if is_valley else plateaus.append(land)
+
+        # mark this pixel as the start of new land
+        start = i
+
+    # record the last bit of land that wasn't saved in the for loop
+    is_valley = values[start] == 0
+    meets_min_size = (is_valley and len(values) - start >= min_valley_size) or (not is_valley and len(values) - start >= min_plat_size)
+    if meets_min_size:
+        land = [start, len(values), y_pos, is_valley, "?", -1]
+        terrain.append(land)
+        valleys.append(land) if is_valley else plateaus.append(land)
+
+    return (valleys, plateaus, terrain)
+
+
+def is_valid(terrain):
+    """
+    Checks if the plateaus and valleys of the terrain are arranged in a keyboard pattern. Use to help check if a keyset is a keyboard
+    """
+    if (len(terrain) < 12):
+        return False
+
+    keyboard = "101011010101" + "101011010101"
+    pattern = ""
+
+    # get the first 12 pieces of land as a binary sequence
+    for i in range(0, 12):
+        (start, end, y_pos, is_valley, *rest) = terrain[i]
+        if is_valley:
+            pattern += "0"
+        else:
+            pattern += "1"
+
+    # check if that binary sequence appears anywhere in the expected keyboard pattern
+    index_of_pattern = keyboard.find(pattern)
     if index_of_pattern == -1:
-        return None
-    order = notes[index_of_pattern % len(notes):] + notes[:index_of_pattern % len(notes)]
-    print(order)
-    return order
+        return False
     
+    # using that sequence as a base, check if the rest of the terrain continues the pattern as expected
+    for i in range(12, len(terrain)):
+        (start, end, y_pos, is_valley, *rest) = terrain[i]
+        actual = "0" if is_valley else "1"
+        expected = keyboard[(index_of_pattern + i) % len(keyboard)]
+
+        if actual != expected:
+            return False
+        
+    return True
+
+
+# first indexed by plateau count, then by strata number
+def cast_vote(valleys, plateaus, full_survey, strata_num, votes):
+    choice = len(plateaus)
+
+    # when we count a new number of keys, file it under history
+    if choice not in votes.keys():
+        votes[choice] = [1, {
+            strata_num: [valleys, plateaus, full_survey]
+        }]
+
+    # when we count a number of keys we've seen before, update history
+    else:
+        num_votes, strata_data = votes[choice]
+        votes[choice][0] = num_votes + 1
+        strata_data[strata_num] = [valleys, plateaus, full_survey]
+
+    return (votes[choice][0])
 
 
 def draw_terrain(frame, terrain, color, size=3, draw_text=True):
@@ -225,6 +268,86 @@ def draw_terrain(frame, terrain, color, size=3, draw_text=True):
             # if idx == len(terrain) - 1:
             #     cv.rectangle(frame, (0, y_pos), (frame.shape[1], y_pos), (100,0,0), 1) # type: ignore
 
+
+# returns an array of Key objects
+def get_keys(frame, votes, vote_verdict):
+    # figure out the order of keys in the layers
+    key_pattern = get_pattern(votes, vote_verdict)
+
+    # using the key pattern, label every piece of land with its note and octave
+    num_votes, layers = votes[vote_verdict]
+    for strata_num, layer in layers.items():
+        [valleys, plateaus, full_survey] = layer
+        label_terrain(full_survey, pattern=key_pattern)
+
+    # sort the land into keys labeled by octave and note
+    keys_by_octave_and_note = sort_layers(list(layers.values()))
+
+    # create Key objects out of the sorted result
+    keys = []
+    for octave, key in enumerate(keys_by_octave_and_note):
+        for note, strata in key.items():
+            strata = list(map(tuple, strata))
+            strata = np.array(strata, dtype=[
+                ("start", "i2"),
+                ("end", "i2"),
+                ("y_pos", "i2"),
+                ("is_valley", "bool"),
+                ("note", "U2"),
+                ("octave", "i1")
+            ])
+
+            keys.append(Key.Key(frame, strata, note, octave, 
+                                lambda a: print("pressed", a.note + str(a.octave)), 
+                                lambda a: print("released", a.note + str(a.octave))))
+
+    return keys
+
+
+def get_pattern(votes, vote_verdict) -> Sequence[str] | None:
+
+    notes = "C D E F G A B".split(" ")
+
+    [num_votes, strata] = votes[vote_verdict]
+    strata_nums = list(strata.keys())
+    strata_nums.sort()
+    [valleys, plateaus, full_survey] = strata[strata_nums[0]]
+
+    index_of_pattern = find_pattern(plateaus)
+    
+    # print(index_of_pattern)
+    if index_of_pattern == -1:
+        return None
+    order = notes[index_of_pattern % len(notes):] + notes[:index_of_pattern % len(notes)]
+    print(order)
+    return order
+
+
+def find_pattern(plateaus, gap_thresh = 4):
+    """
+    Returns the index of the first octave starting at C. Used for labeling a known keyboard
+    """
+    keyboard = "101011010101" + "101011010101"
+    pattern = ""
+
+    if (len(plateaus) < 8):
+        return -1
+
+    for i in range(0, 7):
+        (curr_start, curr_end, *rest) = plateaus[i]
+        (next_start, next_end, *rest) = plateaus[i + 1]
+
+        if (next_start - curr_end > gap_thresh):
+            pattern += "10"
+        else:
+            pattern += "1"
+
+    # print(pattern)
+    index_of_pattern = keyboard.find(pattern)
+    # print(index_of_pattern)
+    offset = -1 if index_of_pattern == -1 else sum([int(val) for val in keyboard[:index_of_pattern]])
+    # print(offset)
+    return offset
 
 
 def label_terrain(terrain, pattern):
@@ -275,267 +398,3 @@ def sort_layers(layers):
             terrain_by_octave_and_note[octave][note].append(full_survey[idx])
 
     return terrain_by_octave_and_note
-
-
-def stratify(frame, max_layers, top = 0, offset = 0, limit = None, reverse = False):
-    limit = max_layers if limit is None else limit
-    (height, width, channels) = frame.shape
-    layers = np.empty(shape=(limit, 1, frame.shape[1], 3))
-    positions = np.empty(shape=limit, dtype=int)
-    step = (height - top) / (max_layers + 1)
-
-    for i in range(limit):
-        step_num = i + max_layers - limit + 1 if reverse else i + 1
-        y_pos = math.floor(step * step_num) + top + offset
-        positions[i] = y_pos
-        layers[i] = frame[y_pos]
-
-    return layers, positions
-
-
-def binarize(stratum):
-    # the data is in the incorrect format for some reason so we fix it with this line
-    stratum = np.uint16(stratum)
-    stratum = cv.cvtColor(stratum, cv.COLOR_BGR2GRAY) # type: ignore
-    thresh, otsu = cv.threshold(stratum, 0, 1, cv.THRESH_BINARY + cv.THRESH_OTSU)
-    return thresh, otsu
-
-
-def adaptive_binarization(stratum, y_pos):
-    threshold, binary = binarize(stratum)
-    valleys, plateaus, terrain = get_terrain(binary, y_pos)
-    if is_valid(terrain):
-        return (valleys, plateaus, terrain)
-
-    # if the first binarization fails, binarize the pleateaus again and then AND the results together
-    if len(plateaus) == 0:
-        return (valleys, plateaus, terrain)
-    print("retrying")
-    sections = []
-    for (start, end, *rest) in plateaus:
-        sections.append(stratum[0][start:end])
-    # print(sections)
-    sections = np.array([np.vstack(sections)])
-    print(sections.shape)
-    threshold, binary = binarize(sections)
-
-    ret, binary = cv.threshold(stratum, threshold, 1, cv.THRESH_BINARY)
-    valleys, plateaus, terrain = get_terrain(binary, y_pos)
-
-
-    # # print("==================================")
-    # for i in range(2,5):
-    #     # uniform = is_uniform(plateaus) 
-    #     # pattern = has_pattern(full_survey)
-    #     valid = is_valid(plateaus, valleys, full_survey)
-    #     # print(y_pos, "k", i, "is_uniform:", uniform, "has_pattern:", pattern, "valid", valid)
-
-    #     if not valid:
-    #         (colors, labels) = quantize_colors(stratum, i)
-    #         valleys, plateaus, full_survey = get_terrain(labels, y_pos)
-    #     else:
-    #         break
-
-    return (valleys, plateaus, terrain)
-
-
-# [ <start>, <end>, <y_pos>, <is_valley>, <note> = "?", octave> = -1 ]
-def get_terrain(binary_stratum, y_pos, min_plat_size = 6, min_valley_size = 6):
-    values = binary_stratum.flatten()
-    terrain = []
-    valleys = []
-    plateaus = []
-    start = 0
-
-    for i, curr in enumerate(values):
-        # if this is the first element, we can treat prev as curr so we end up ignoring it
-        prev = values[i - 1] if i > 0 else curr
-        
-        # if this pixel is the same as the previous, ignore
-        if curr == prev:
-            continue
-
-        # when the pixel value changes, record the land between now and the previous change. the land is a valley if its pixels are black
-        is_valley = prev == 0
-        meets_min_size = (is_valley and i - start >= min_valley_size) or (not is_valley and i - start >=min_plat_size)
-        
-        # if there isn't enough land, we'll skip over this section
-        if meets_min_size:
-            land = [start, i, y_pos, is_valley, "?", -1]
-            terrain.append(land)
-            valleys.append(land) if is_valley else plateaus.append(land)
-
-        # mark this pixel as the start of new land
-        start = i
-
-    # record the last bit of land that wasn't saved in the for loop
-    is_valley = values[start] == 0
-    meets_min_size = (is_valley and len(values) - start >= min_valley_size) or (not is_valley and len(values) - start >= min_plat_size)
-    if meets_min_size:
-        land = [start, len(values), y_pos, is_valley, "?", -1]
-        terrain.append(land)
-        valleys.append(land) if is_valley else plateaus.append(land)
-
-    return (valleys, plateaus, terrain)
-
-
-# def from_terrain(frame, terrain):
-#     sections = []
-#     for (start, end, y_pos, is_valley, note, octave) in terrain:
-#         sections.append(frame[y_pos][start:end])
-#     return sections
-
-
-def is_valid(full_survey):
-    # arbitrary minimum but I don't see any piano tutorials with less than a full octave
-    # has_min_key_count = len(plateaus) >= 7
-    # if not has_min_key_count:
-    #     return False
-    
-    # check if the terrain has a keyboard pattern
-    if not has_pattern(full_survey):
-        return False
-
-    # # check if the terrain has roughly similar size
-    # if not is_uniform(plateaus):
-    #     return False
-
-    return True
-
-
-
-def find_pattern(plateaus, gap_thresh = 4):
-    """
-    Returns the index of the first octave starting at C. Used for labeling a known keyboard
-    """
-    keyboard = "101011010101" + "101011010101"
-    pattern = ""
-
-    if (len(plateaus) < 8):
-        return -1
-
-    for i in range(0, 7):
-        (curr_start, curr_end, *rest) = plateaus[i]
-        (next_start, next_end, *rest) = plateaus[i + 1]
-
-        if (next_start - curr_end > gap_thresh):
-            pattern += "10"
-        else:
-            pattern += "1"
-
-    # print(pattern)
-    index_of_pattern = keyboard.find(pattern)
-    # print(index_of_pattern)
-    offset = -1 if index_of_pattern == -1 else sum([int(val) for val in keyboard[:index_of_pattern]])
-    # print(offset)
-    return offset
-
-
-
-def has_pattern(full_survey):
-    """
-    Checks if the plateaus and valleys of the terrain are arranged in a keyboard pattern. Use to help check if a keyset is a keyboard
-    """
-
-    if (len(full_survey) < 12):
-        return False
-    
-    # # if all plateaus and no valleys, it is a valid pattern only if the plateaus are also evenly spaced
-    # if all([not is_valley for (start, end, y_pos, is_valley, *rest) in full_survey]):
-    #     return is_uniform(full_survey)
-    
-    keyboard = "101011010101" + "101011010101"
-    pattern = ""
-
-    for i in range(0, 12):
-        (start, end, y_pos, is_valley, *rest) = full_survey[i]
-        if is_valley:
-            pattern += "0"
-        else:
-            pattern += "1"
-
-    index_of_pattern = keyboard.find(pattern)
-    if index_of_pattern == -1:
-        return False
-    
-    for i in range(12, len(full_survey)):
-        (start, end, y_pos, is_valley, *rest) = full_survey[i]
-        expected = "0" if is_valley else "1"
-        if keyboard[(index_of_pattern + i) % len(keyboard)] != expected:
-            return False
-        
-    return True
-
-
-
-# def get_terrain(labels, y_pos, min_plat_size = 6, min_valley_size = 6):
-#     """
-#     Given a list of labels, returns 3 lists of tuples. \n
-#     The first 2 lists represent valley and plateau features. The third contains tuples from both features in order. \n
-#     A pixel is considered plateau if it is labeled with the most common label \n
-#     A pixel is considered valley if it is labeled with any label other than the most common \n
-    
-#     Each tuple has the following structure
-#     ```
-#     [ <start>, <end>, <y_pos>, <is_valley>, <note> = "?", octave> = -1 ]
-#     ```
-#     """
-#     terrain = labels.flatten()
-#     plateau_label, _ = stats.mode(terrain)
-#     in_valley = False
-
-#     valleys = []
-#     plateaus = []
-#     full_survey = []
-#     start_of_valley = 0
-#     start_of_plateau = 0
-    
-#     for i in range(len(labels)):
-#         if not in_valley and terrain[i] != plateau_label:
-#             in_valley = True
-#             start_of_valley = i
-#             if (i - start_of_plateau) >= min_plat_size:
-#                 entry = [start_of_plateau, i, y_pos, False, "?", -1]
-#                 plateaus.append(entry)
-#                 full_survey.append(entry)
-
-#         elif in_valley and terrain[i] == plateau_label:
-#             in_valley = False
-#             start_of_plateau = i
-#             if (i - start_of_valley) >= min_valley_size:
-#                 entry = [start_of_valley, i, y_pos, True, "?", -1]
-#                 valleys.append(entry)
-#                 full_survey.append(entry)
-
-#     if in_valley and (len(terrain) - start_of_valley) >= min_valley_size:
-#         entry = [start_of_valley, len(terrain), y_pos, True, "?", -1]
-#         valleys.append(entry)
-#         full_survey.append(entry)
-#     elif not in_valley and (len(terrain) - start_of_plateau) >= min_plat_size:
-#         entry = [start_of_plateau, len(terrain), y_pos, False, "?", -1]
-#         plateaus.append(entry)
-#         full_survey.append(entry)
-
-#     return valleys, plateaus, full_survey
-
-
-
-# first indexed by plateau count, then by strata number
-def cast_vote(valleys, plateaus, full_survey, strata_num, votes):
-    choice = len(plateaus)
-
-    # when we count a new number of keys, file it under history
-    if choice not in votes.keys():
-        votes[choice] = [1, {
-            strata_num: [valleys, plateaus, full_survey]
-        }]
-
-    # when we count a number of keys we've seen before, update history
-    else:
-        num_votes, strata_data = votes[choice]
-        votes[choice][0] = num_votes + 1
-        strata_data[strata_num] = [valleys, plateaus, full_survey]
-
-    return (votes[choice][0])
-
-
