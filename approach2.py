@@ -73,16 +73,23 @@ def color_quantization(frame):
     return (None, colors, best_labels)
 
 
-def binarize(frame):
+def binarize(frame, type=0):
     scale = 1152 / frame.shape[1]
     frame = cv.resize(frame, None, fx=scale, fy=scale)
     gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     blur = cv.blur(gray, (3,3))
 
-    # _, image = cv.threshold(gray,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
-    image = cv.adaptiveThreshold(blur, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 3, 2)
-    # image = custom_binarize(frame)
-    return image
+    if type == 0:
+        _, image = cv.threshold(gray,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+        return image
+    if type == 1:
+        image = cv.adaptiveThreshold(blur, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 3, 2)
+        return image
+    if type == 2:
+        image = custom_binarize(frame)
+        return image
+    
+    return frame
 
 
 def custom_binarize(frame):
@@ -138,9 +145,13 @@ def find_row(array, row):
 # setup_video_capture("videos/Van Gogh by Virginio Aiello, On Piano - [Piano Tutorial] (Synthesia - SeeMusic) [2ESlH-fwxIc].webm")
 # setup_video_capture("videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
 # image1 = cv.imread('frames/keyboard1.jpg')
-# cv.imshow("keyboard1", binarize(image1))
+# cv.imshow("keyboard1", binarize(image1, type=0))
+# cv.imshow("keyboard2", binarize(image1, type=1))
+# cv.imshow("keyboard3", binarize(image1, type=2))
 # image2 = cv.imread('frames/keyboard2.jpg')
 # cv.imshow("keyboard2", binarize(image2))
-# image3 = cv.imread('frames/keyboard3.jpg')
-# cv.imshow("keyboard3", binarize(image3))
-# cv.waitKey(-1)
+image3 = cv.imread('frames/keyboard3.jpg')
+cv.imshow("keyboard1", binarize(image3, type=0))
+cv.imshow("keyboard2", binarize(image3, type=1))
+cv.imshow("keyboard3", binarize(image3, type=2))
+cv.waitKey(-1)

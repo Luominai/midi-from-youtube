@@ -72,3 +72,22 @@ A color detection approach won't always work because of missing frames. sometime
 To fix this, we have to use a shape based approach. 
 In this method, we can focus only on the strata containing both black and white keys, since it seems like the length of the falling notes 
     is only as large as those gaps
+
+Multi-blur + canny using otsu's thresh seems to work well for detecting keys, so long as the search area is restricted.
+If the image contains the keyboard or other major features (like in birdbrain the top of the screen is the sheet music),
+    then otsu fails to find a good threshold. We could also just use a static threshold but i dislike that and would prefer
+    dynamically determined thresholds
+
+Actually, the aftereffects produced by keys messes up otsu (in birdbrain at least). The text seems to be an important part of why
+    it gets messed up. Textured backgrounds do the same
+
+Maybe we could do something with channels? Like what if we try to detect only in the green channel?
+
+MOG Bg sub is useful but seems inconsistent. My guess is that because the notes fall along the same lines, bg sub will start to consider 
+    the notes part of the background the longer a line has notes in it
+
+KNN seems to get easily garbled by background noise but the contour is still there, so maybe we use contour detection over canny?
+    The garbling seems to be a consequence of notes merging into bg
+
+Otsu's binarization along the strata seems like the most consistent method when the notes are actually there. It's super sensitive to noise though
+We might be able to replace the quantization with otsu's binarization actually

@@ -118,8 +118,8 @@ def sort_into_buckets(data, spike_thresh = 8, range_thresh = 10):
 # [x, y, width, height, area]
 def find_black_keys(image, lower_thresh = 0, upper_thresh = 30):
     black_mask = cv.inRange(image, np.array([lower_thresh, lower_thresh, lower_thresh]), np.array([upper_thresh, upper_thresh, upper_thresh]))
+    cv.imshow("mask", black_mask)
     black_mask_components = cv.connectedComponentsWithStats(black_mask)
-    
     (num_labels, labels, stats, centroids) = black_mask_components
 
     order = np.argsort(stats[:,1]) # sort components by x-value
