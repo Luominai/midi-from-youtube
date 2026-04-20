@@ -3,7 +3,7 @@ import numpy as np
 from scipy import stats
 
 
-def setup_video_capture(process, path_to_video):
+def setup_video_capture(path_to_video):
     is_paused = True
     skip_frame = True
     frame_count = 0
@@ -54,7 +54,7 @@ def process(frame):
 def binarize(frame):
     scale = 1152 / frame.shape[1]
     frame = cv.resize(frame, None, fx=scale, fy=scale)
-    frame = frame[50:150]
+    frame = frame[:500]
     gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
     # threshold once
     thresh, otsu = cv.threshold(gray,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
@@ -76,14 +76,15 @@ def binarize(frame):
 # setup_video_capture("videos/Menu (from Kirby Air Riders) - Piano Tutorial [iElUjQXQkPc].webm")
 # setup_video_capture("videos/Van Gogh by Virginio Aiello, On Piano - [Piano Tutorial] (Synthesia - SeeMusic) [2ESlH-fwxIc].webm")
 # setup_video_capture("videos/BIRDBRAIN ｜ Jamie Paige PIANO TUTORIAL SHEET + MIDI [59qdAsKqIjA].webm")
+setup_video_capture("videos/Flavor Foley - ＂Ego Renegade Boy＂ ｜ (Piano Cover + Sheet Music) [U7pYL8adTNY].webm")
 # image1 = cv.imread('frames/keyboard1.jpg')
 # cv.imshow("keyboard1", binarize(image1, type=0))
 # cv.imshow("keyboard2", binarize(image1, type=1))
 # cv.imshow("keyboard3", binarize(image1, type=2))
 # image2 = cv.imread('frames/keyboard2.jpg')
 # cv.imshow("keyboard2", binarize(image2))
-image3 = cv.imread('frames/keyboard3.jpg')
-cv.imshow("keyboard1", binarize(image3))
-cv.imshow("keyboard2", binarize(image3))
-cv.imshow("keyboard3", binarize(image3))
+# image3 = cv.imread('frames/keyboard3.jpg')
+# cv.imshow("keyboard1", binarize(image3))
+# cv.imshow("keyboard2", binarize(image3))
+# cv.imshow("keyboard3", binarize(image3))
 cv.waitKey(-1)

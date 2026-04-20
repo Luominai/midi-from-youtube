@@ -3,8 +3,6 @@ from typing import Sequence
 import cv2 as cv
 from cv2.typing import MatLike
 import numpy as np
-from scipy import stats
-from setup import setup_video_capture
 import key as Key
 
 
@@ -12,7 +10,7 @@ class KeyboardParser4:
     def __init__(self):
         self.scan_progress = 0
         self.votes = {}
-        self.vote_threshold = 90
+        self.vote_threshold = 60
         self.vote_verdict = None
         self.num_strata = 50
         self.batch = 5
@@ -33,13 +31,16 @@ class KeyboardParser4:
 
         # if there is a verdict and the keys are not yet defined, use the verdict to set the keys
         if self.vote_verdict is not None and len(self.keys) == 0:
-            num_votes, layers = self.votes[self.vote_verdict]
             self.keys = get_keys(frame, self.votes, self.vote_verdict)
 
         # if we have a defined set of keys
         if len(self.keys) != 0:
+            avg_y = 0
             for key in self.keys:
                 key.process(frame)
+                avg_y += int(key.strata[0]["y_pos"])
+            avg_y = avg_y // len(self.keys)
+            cv.line(frame, (0, avg_y), (width, avg_y), (0, 255, 0), 2)
 
         cv.imshow("frame", frame)
         return paused
@@ -73,8 +74,6 @@ def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_
     for i in range(batch_size * batch_num, batch_size * (batch_num + 1)):
         layer = layers[i]
         y_pos = positions[i]
-        # binary = binarize(layer)
-        # valleys, plateaus, terrain = get_terrain(binary, y_pos)
         valleys, plateaus, terrain = adaptive_binarization(layer, y_pos)
         valid = is_valid(terrain)
 
@@ -82,7 +81,6 @@ def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_
             num_votes = cast_vote(valleys, plateaus, terrain, i, votes)
             print("strata", str(i), ":", len(plateaus), num_votes)
 
-            # if num_votes >= vote_threshold and has_pattern(terrain):
             if num_votes >= vote_threshold:
                 vote_verdict = len(plateaus)
                 print("vote decided for", vote_verdict)

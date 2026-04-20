@@ -32,8 +32,11 @@ class Key:
 
     def process(self, frame):
         num_activations = 0
-        KeyboardParser.draw_terrain(frame, self.strata, octave_colors[self.octave % len(octave_colors)], size=2, draw_text=False)
-        cv.line(frame, self.line_start, self.line_end, (255,0,0), 1) # type: ignore
+        # KeyboardParser.draw_terrain(frame, self.strata, octave_colors[self.octave % len(octave_colors)], size=2, draw_text=False)
+        if self.note[-1] == "#":
+            cv.line(frame, self.line_start, self.line_end, (255,0,0), 1) # type: ignore
+        else:
+            cv.line(frame, self.line_start, self.line_end, (0,255,0), 1) # type: ignore
 
         # print("========" + self.note + str(self.octave) + "========")
         for idx, (start, end, y_pos, *rest) in enumerate(self.strata):
