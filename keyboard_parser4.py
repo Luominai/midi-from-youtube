@@ -10,7 +10,7 @@ class KeyboardParser4:
     def __init__(self):
         self.scan_progress = 0
         self.votes = {}
-        self.vote_threshold = 60
+        self.vote_threshold = 40
         self.vote_verdict = None
         self.num_strata = 50
         self.batch = 5
@@ -93,7 +93,12 @@ def scan(frame: MatLike, batch_size: int, num_strata: int, batch_num: int, vote_
 
 
 def stratify(frame, max_layers, top = 0):
-    (height, width, channels) = frame.shape
+    """
+    Returns layers, positions \n
+    Layers: the pixels of stratum i, where i is the index \n
+    Positions: The y-pos of the startum i, where i is the index
+    """
+    (height, *rest) = frame.shape
     step = (height - top) / (max_layers + 1)
 
     layers = np.empty(shape=(max_layers, 1, frame.shape[1], 3), dtype=int)
@@ -107,7 +112,44 @@ def stratify(frame, max_layers, top = 0):
     return layers, positions
 
 
+
+def stratify_gray(frame, max_layers, top = 0):
+    """
+    Returns layers, positions \n
+    Layers: the pixels of stratum i, where i is the index \n
+    Positions: The y-pos of the startum i, where i is the index
+    """
+    (height, width, *rest) = frame.shape
+    step = (height - top) / (max_layers + 1)
+
+    layers = np.empty(shape=(max_layers, width), dtype=int)
+    positions = np.empty(shape=max_layers, dtype=int)
+
+    for i in range(max_layers):
+        y_pos = math.floor(step * (i + 1)) + top
+        positions[i] = y_pos
+        layers[i] = frame[y_pos]
+
+    return layers, positions
+
+
+def get_strata_positions(frame, num_strata, top = 0):
+    (height, width, *rest) = frame.shape
+    step = (height - top) / (num_strata + 1)
+
+    positions = []
+    for i in range(num_strata):
+        y_pos = math.floor(step * (i + 1)) + top
+        positions.append( y_pos )
+
+    return positions
+
+
 def adaptive_binarization(stratum, y_pos):
+    """
+    Returns valleys, plateaus, terrain
+    Each are an array of items: ```[ <start>, <end>, <y_pos>, <is_valley>, <note> = "?", octave> = -1 ]```
+    """
     stratum = np.uint16(stratum)
     stratum = cv.cvtColor(stratum, cv.COLOR_BGR2GRAY) # type: ignore
 
@@ -135,6 +177,9 @@ def adaptive_binarization(stratum, y_pos):
 
 # [ <start>, <end>, <y_pos>, <is_valley>, <note> = "?", octave> = -1 ]
 def get_terrain(binary_stratum, y_pos, min_plat_size = 6, min_valley_size = 6):
+    """
+    Returns an array of items: ```[ <start>, <end>, <y_pos>, <is_valley>, <note> = "?", octave> = -1 ]```
+    """
     values = binary_stratum.flatten()
     terrain = []
     valleys = []

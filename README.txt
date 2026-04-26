@@ -91,3 +91,5 @@ KNN seems to get easily garbled by background noise but the contour is still the
 
 Otsu's binarization along the strata seems like the most consistent method when the notes are actually there. It's super sensitive to noise though
 We might be able to replace the quantization with otsu's binarization actually
+
+Using the value channel of HSV instead of grayscale has some massive advantages on birdbrain. 
